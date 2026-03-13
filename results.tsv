@@ -3,3 +3,4 @@ commit	val_bpb	memory_gb	status	description
 fdf2956	1.360758	21.2	keep	increase depth from 2 to 4 (model_dim 256)
 2a0496d	1.423965	21.1	discard	halve total batch size to 2^13 (device batch 4)
 b3c638d	1.378900	21.4	discard	SwiGLU MLP replacing squared ReLU
+b2fc315	1.373438	21.2	discard	increase matrix LR from 0.04 to 0.06
