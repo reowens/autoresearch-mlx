@@ -34,10 +34,13 @@ MINS_PER_RUN = 7  # ~5 min training + ~2 min overhead
 MSG_FIRST = (
     "Read results.tsv and train.py. Run exactly ONE experiment: "
     "modify train.py, commit, train, evaluate, update results.tsv, keep or discard. "
+    "IMPORTANT: Run only ONE training run. If it crashes or diverges, log it and STOP. "
+    "Do NOT revert and try something else — that counts as a second experiment. "
     "Stop after this single experiment is complete."
 )
 MSG_NEXT = (
-    "Run exactly ONE more experiment, then stop."
+    "Run exactly ONE more experiment, then stop. "
+    "If it crashes or diverges, log it and stop — do not start another."
 )
 
 

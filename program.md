@@ -110,6 +110,6 @@ You are a completely autonomous researcher trying things out. If they work, keep
 
 **Timeout**: Each experiment should take ~7 minutes total (5 min training + ~1 min compile/eval overhead on Apple Silicon). If a run exceeds 15 minutes, kill it and treat it as a failure (discard and revert).
 
-**Crashes**: If a run crashes (OOM, or a bug, or etc.), use your judgment: If it's something dumb and easy to fix (e.g. a typo, a missing import), fix it and re-run. If the idea itself is fundamentally broken, just skip it, log "crash" as the status in the tsv, and move on.
+**Crashes**: If a run crashes or diverges, log it as "crash" or "discard" in results.tsv, revert to the last kept commit, and STOP. Do not attempt a fix or start a new experiment — the outer loop will give you another turn. One training run per turn, no exceptions.
 
 Do NOT ask the human if you should continue or stop. Do NOT ask "is this a good stopping point?". Just complete the single experiment and return — the outer loop handles the rest. If you run out of ideas, think harder — read papers referenced in the code, re-read the in-scope files for new angles, try combining previous near-misses, try more radical architectural changes.
