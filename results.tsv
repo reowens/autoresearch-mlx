@@ -7,3 +7,4 @@ b2fc315	1.373438	21.2	discard	increase matrix LR from 0.04 to 0.06
 805d9ea	1.448067	22.5	discard	depth 5 (model_dim 320) with warmup 0.10
 6008635	1.379877	21.2	discard	reduce warmdown ratio from 0.30 to 0.15
 1381e07	1.425563	21.1	discard	disable value embeddings
+c23c59e	1.373087	21.2	discard	enable VE on all layers (was alternating)
