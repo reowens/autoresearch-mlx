@@ -26,11 +26,22 @@ program.md      — agent instructions (the autonomous experiment protocol)
 pyproject.toml  — dependencies (MLX, numpy, tiktoken, etc.)
 ```
 
+## Performance (M4 Max, 5-minute budget)
+
+| | AdamW (old) | MuonAdamW + mx.compile |
+|--|-------------|------------------------|
+| val_bpb | 1.497 | **1.417** |
+| Throughput | ~100K tok/sec | ~138K tok/sec |
+| Steps | 1,817 | 2,467 |
+
+5.3% val_bpb improvement with 38% higher throughput, at the same memory footprint (19 GB).
+
 ## Differences from upstream
 
 - **MLX instead of PyTorch/CUDA.** Native Apple Silicon training with unified memory.
 - **MuonAdamW optimizer.** Full port of upstream's Muon + AdamW, including polar express orthogonalization, NorMuon variance reduction, cautious weight decay, and momentum/weight-decay schedules.
-- **Smaller eval token budget.** Reduced for faster iteration on Apple Silicon.
+- **mx.compile on forward+backward pass.** ~38% throughput gain via graph fusion. Optimizer runs uncompiled (MLX can't compile custom optimizers with mutation patterns yet).
+- **Tuned eval token budget.** 10x shards (~5.2M tokens) — middle ground between upstream's 40x and fast iteration.
 - **~6-7 minutes per experiment.** 5 min training + compile/eval overhead.
 - **MFU reporting is placeholder.** No Apple Silicon equivalent to the H100 FLOPs reference.
 
