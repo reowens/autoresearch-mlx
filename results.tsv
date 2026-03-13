@@ -1,2 +1,5 @@
 commit	val_bpb	memory_gb	status	description
 47860c7	1.417002	18.6	keep	baseline (MuonAdamW + mx.compile)
+fdf2956	1.360758	21.2	keep	increase depth from 2 to 4 (model_dim 256)
+2a0496d	1.423965	21.1	discard	halve total batch size to 2^13 (device batch 4)
+b3c638d	1.378900	21.4	discard	SwiGLU MLP replacing squared ReLU
