@@ -29,7 +29,7 @@ pyproject.toml  — dependencies (MLX, numpy, tiktoken, etc.)
 ## Differences from upstream
 
 - **MLX instead of PyTorch/CUDA.** Native Apple Silicon training with unified memory.
-- **AdamW-only.** Upstream uses Muon + AdamW; this port keeps AdamW only for simplicity.
+- **MuonAdamW optimizer.** Full port of upstream's Muon + AdamW, including polar express orthogonalization, NorMuon variance reduction, cautious weight decay, and momentum/weight-decay schedules.
 - **Smaller eval token budget.** Reduced for faster iteration on Apple Silicon.
 - **~6-7 minutes per experiment.** 5 min training + compile/eval overhead.
 - **MFU reporting is placeholder.** No Apple Silicon equivalent to the H100 FLOPs reference.
