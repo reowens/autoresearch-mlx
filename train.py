@@ -9,6 +9,7 @@ import math
 import os
 import time
 from dataclasses import dataclass
+from functools import partial
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -521,6 +522,13 @@ optimizer = MuonAdamW(
 
 loss_grad_fn = nn.value_and_grad(model, lambda model, inputs, targets: model(inputs, targets=targets))
 
+# Compile forward+backward pass for fused ops (MLX 0.31+)
+compile_state = [model.state]
+
+@partial(mx.compile, inputs=compile_state, outputs=compile_state)
+def compiled_fwd_bwd(x, y):
+    return loss_grad_fn(model, x, y)
+
 print(f"Time budget: {TIME_BUDGET}s")
 print(f"Gradient accumulation steps: {grad_accum_steps}")
 
@@ -535,7 +543,7 @@ while True:
     train_loss = None
 
     for _ in range(grad_accum_steps):
-        loss, grads = loss_grad_fn(model, x, y)
+        loss, grads = compiled_fwd_bwd(x, y)
         mx.eval(loss, grads)
         if t_compiled is None:
             t_compiled = time.time()
@@ -557,6 +565,7 @@ while True:
     optimizer.set_lr_multiplier(lrm)
     optimizer.update(model, accum_grads, muon_momentum=muon_momentum, muon_weight_decay=muon_weight_decay)
     mx.eval(model.parameters(), *optimizer.state)
+    compile_state[0] = model.state  # refresh for next compiled call
 
     train_loss_f = float(train_loss.item())
 
