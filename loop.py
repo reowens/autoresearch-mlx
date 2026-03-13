@@ -21,7 +21,12 @@ from claude_agent_sdk import (
 )
 
 DIR = os.path.dirname(os.path.abspath(__file__))
-PROMPT = open(os.path.join(DIR, "program.md")).read()
+
+_prompt_path = os.path.join(DIR, "program.md")
+if not os.path.exists(_prompt_path):
+    sys.exit(f"  Error: {_prompt_path} not found")
+with open(_prompt_path) as f:
+    PROMPT = f.read()
 
 MSG_FIRST = (
     "Read results.tsv and train.py. Run exactly ONE experiment: "
@@ -70,24 +75,30 @@ async def run(minutes):
             print(f"  === Round {round_num} | {remaining:.0f} min left ===\n")
 
             msg = MSG_FIRST if round_num == 1 else MSG_NEXT
-            await client.query(msg)
+            try:
+                await client.query(msg)
 
-            async for m in client.receive_response():
-                if isinstance(m, AssistantMessage):
-                    for b in m.content:
-                        if isinstance(b, TextBlock) and b.text.strip():
-                            print(f"  {b.text.strip()[:200]}")
-                        elif isinstance(b, ToolUseBlock):
-                            cmd = b.input.get("command", "") if b.name == "Bash" else ""
-                            if "train.py" in cmd and ">" in cmd:
-                                print("  > training (~5 min)...")
-                            else:
-                                label = b.input.get("description", "") or cmd[:60] or b.name
-                                print(f"  [{b.name}] {label}")
-                elif isinstance(m, ResultMessage):
-                    cost = m.total_cost_usd or 0
-                    print(f"  --- round done (${cost:.2f}) ---\n")
-                    break
+                async for m in client.receive_response():
+                    if isinstance(m, AssistantMessage):
+                        for b in m.content:
+                            if isinstance(b, TextBlock) and b.text.strip():
+                                print(f"  {b.text.strip()[:200]}")
+                            elif isinstance(b, ToolUseBlock):
+                                inp = b.input or {}
+                                cmd = inp.get("command", "") if b.name == "Bash" else ""
+                                if "train.py" in cmd and ">" in cmd:
+                                    print("  > training (~5 min)...")
+                                else:
+                                    label = inp.get("description", "") or cmd[:60] or b.name
+                                    print(f"  [{b.name}] {label}")
+                    elif isinstance(m, ResultMessage):
+                        cost = m.total_cost_usd or 0
+                        print(f"  --- round done (${cost:.2f}) ---\n")
+                        break
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                print(f"  --- round failed: {type(e).__name__}: {e} ---\n")
 
             if round_num > 1 and time.time() >= deadline:
                 print("  Time's up.")
@@ -100,6 +111,8 @@ async def run(minutes):
 def parse_duration(raw):
     """Parse duration string to minutes. >=10 means minutes, <10 means hours."""
     val = float(raw)
+    if val <= 0:
+        raise ValueError(f"duration must be positive, got {raw}")
     if val >= 10:
         return val  # minutes
     return val * 60  # hours → minutes
@@ -107,7 +120,10 @@ def parse_duration(raw):
 
 def main():
     if len(sys.argv) > 1:
-        minutes = parse_duration(sys.argv[1])
+        try:
+            minutes = parse_duration(sys.argv[1])
+        except ValueError as e:
+            sys.exit(f"  Error: {e}")
     else:
         try:
             raw = input("  Duration (single digit = hours, 10+ = minutes) [6h]: ").strip()
