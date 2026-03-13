@@ -1,28 +1,31 @@
 # autoresearch-mlx task runner
 
-set working-directory := justfile_directory()
+root := justfile_directory()
 
-# Start autonomous experiment loop (e.g. `just loop 15` for 15 min, `just loop 6` for 6h)
+# Interactive wizard: check data, pick branch, configure, then start
+start:
+    cd {{root}} && uv run start.py
+
+# Start autonomous experiment loop (e.g. `just loop 10` for 10 experiments)
 loop *ARGS:
-    uv run loop.py {{ARGS}}
+    cd {{root}} && uv run loop.py {{ARGS}}
 
 # Run a single 5-minute training experiment
 train:
-    uv run train.py
+    cd {{root}} && uv run train.py
 
 # Show current state (branch, model, results) without starting
 status:
-    uv run loop.py --dry-run
+    cd {{root}} && uv run loop.py --dry-run
 
 # Show results scoreboard
 results:
-    @cat results.tsv 2>/dev/null || echo "No results.tsv found"
+    @cd {{root}} && cat results.tsv 2>/dev/null || echo "No results.tsv found"
 
 # Prepare data + tokenizer (one-time setup)
 prepare:
-    uv run prepare.py
+    cd {{root}} && uv run prepare.py
 
 # Open analysis notebook
 analyze:
-    uv sync --extra analysis
-    uv run jupyter notebook analysis.ipynb
+    cd {{root}} && uv sync --extra analysis && uv run jupyter notebook analysis.ipynb

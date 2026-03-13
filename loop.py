@@ -1,9 +1,8 @@
 """
-Autonomous experiment loop. Runs ONE experiment per turn, checks time between turns.
+Autonomous experiment loop. Runs ONE experiment per turn.
 
-    uv run loop.py              # asks for duration
-    uv run loop.py 15           # 15 minutes
-    uv run loop.py 6            # 6 hours
+    uv run loop.py              # asks for number of runs
+    uv run loop.py 10           # run 10 experiments
     uv run loop.py --dry-run    # show state without starting
     MODEL=sonnet uv run loop.py # use sonnet instead of opus
 """
@@ -30,6 +29,8 @@ if not os.path.exists(_prompt_path):
 with open(_prompt_path) as f:
     PROMPT = f.read()
 
+MINS_PER_RUN = 7  # ~5 min training + ~2 min overhead
+
 MSG_FIRST = (
     "Read results.tsv and train.py. Run exactly ONE experiment: "
     "modify train.py, commit, train, evaluate, update results.tsv, keep or discard. "
@@ -52,10 +53,8 @@ def print_results():
     print()
 
 
-async def run(minutes):
+async def run(num_runs):
     start = time.time()
-    deadline = start + minutes * 60
-    round_num = 0
     total_cost = 0.0
     model = os.environ.get("MODEL", "opus")
 
@@ -67,19 +66,14 @@ async def run(minutes):
         model=model,
     )
 
-    if minutes >= 60:
-        budget = f"{minutes / 60:.4g}h"
-    else:
-        budget = f"{minutes:.0f}m"
-    print(f"\n  Loop started — {budget} budget. Ctrl+C to stop.\n")
+    est = num_runs * MINS_PER_RUN
+    print(f"\n  Loop started — {num_runs} runs (~{est} min). Ctrl+C to stop.\n")
 
     async with ClaudeSDKClient(options=opts) as client:
-        while True:
-            round_num += 1
+        for round_num in range(1, num_runs + 1):
             elapsed = (time.time() - start) / 60
-            remaining = max(0, (deadline - time.time()) / 60)
             cost_str = f" | ${total_cost:.2f}" if total_cost > 0 else ""
-            print(f"  === Round {round_num} | {elapsed:.0f}m elapsed | {remaining:.0f}m left{cost_str} ===\n")
+            print(f"  === Round {round_num}/{num_runs} | {elapsed:.0f}m elapsed{cost_str} ===\n")
 
             msg = MSG_FIRST if round_num == 1 else MSG_NEXT
             try:
@@ -108,23 +102,9 @@ async def run(minutes):
             except Exception as e:
                 print(f"  --- round failed: {type(e).__name__}: {e} ---\n")
 
-            if round_num > 1 and time.time() >= deadline:
-                print("  Time's up.")
-                break
-
     elapsed = (time.time() - start) / 60
-    print(f"\n  Done — {round_num} rounds, {elapsed:.0f}m, ${total_cost:.2f}.")
+    print(f"\n  Done — {num_runs} rounds, {elapsed:.0f}m, ${total_cost:.2f}.")
     print_results()
-
-
-def parse_duration(raw):
-    """Parse duration string to minutes. >=10 means minutes, <10 means hours."""
-    val = float(raw)
-    if val <= 0:
-        raise ValueError(f"duration must be positive, got {raw}")
-    if val >= 10:
-        return val  # minutes
-    return val * 60  # hours → minutes
 
 
 def dry_run():
@@ -150,20 +130,22 @@ def main():
 
     if args:
         try:
-            minutes = parse_duration(args[0])
+            num_runs = int(args[0])
+            if num_runs <= 0:
+                raise ValueError("must be positive")
         except ValueError as e:
             sys.exit(f"  Error: {e}")
     else:
         try:
-            raw = input("  Duration (single digit = hours, 10+ = minutes) [6h]: ").strip()
-            minutes = parse_duration(raw) if raw else 360.0
+            raw = input(f"  Number of runs [10] (~{10 * MINS_PER_RUN} min): ").strip()
+            num_runs = int(raw) if raw else 10
         except (ValueError, EOFError, KeyboardInterrupt):
-            minutes = 360.0
+            num_runs = 10
 
     print()
 
     try:
-        asyncio.run(run(minutes))
+        asyncio.run(run(num_runs))
     except KeyboardInterrupt:
         print("\n  Stopped.")
         print_results()
