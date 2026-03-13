@@ -53,15 +53,15 @@ BAR_WIDTH = 25
 SYSTEM_PROMPT = open(PROGRAM_PATH).read()
 
 FIRST_MESSAGE = """\
-Start the experiment loop. The branch and baseline are already set up.
-Read results.tsv for current state, then begin experimenting.
-You are fully autonomous — run experiments continuously without stopping.
-Each cycle: decide what to try, modify train.py, commit, run training, \
-evaluate, update results.tsv, keep or discard, then start the next one.
-Do NOT ask for permission or confirmation. Do NOT stop between experiments.\
+Read results.tsv and train.py to understand current state, then run exactly \
+ONE experiment: modify train.py, commit, run training, check results, update \
+results.tsv, keep or discard. Stop after this single experiment is complete.\
 """
 
-NEXT_MESSAGE = "Continue. Run the next experiment immediately."
+NEXT_MESSAGE = """\
+Run exactly ONE more experiment. Check results.tsv, try something new, \
+train, evaluate, update results.tsv. Stop after this single experiment.\
+"""
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
