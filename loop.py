@@ -120,7 +120,7 @@ def interactive_startup(skip_hours: float | None = None) -> float:
         return skip_hours
 
     try:
-        raw = input(f"  Duration in hours {DIM}[6]{RESET}: ").strip()
+        raw = input(f"  Duration in hours {DIM}[6]{RESET}: ").strip().strip("\r")
         hours = float(raw) if raw else 6.0
     except (ValueError, EOFError):
         hours = 6.0
