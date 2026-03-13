@@ -51,8 +51,10 @@ def print_results():
 
 
 async def run(minutes):
-    deadline = time.time() + minutes * 60
+    start = time.time()
+    deadline = start + minutes * 60
     round_num = 0
+    total_cost = 0.0
 
     opts = ClaudeAgentOptions(
         system_prompt=PROMPT,
@@ -71,8 +73,10 @@ async def run(minutes):
     async with ClaudeSDKClient(options=opts) as client:
         while True:
             round_num += 1
+            elapsed = (time.time() - start) / 60
             remaining = max(0, (deadline - time.time()) / 60)
-            print(f"  === Round {round_num} | {remaining:.0f} min left ===\n")
+            cost_str = f" | ${total_cost:.2f}" if total_cost > 0 else ""
+            print(f"  === Round {round_num} | {elapsed:.0f}m elapsed | {remaining:.0f}m left{cost_str} ===\n")
 
             msg = MSG_FIRST if round_num == 1 else MSG_NEXT
             try:
@@ -93,7 +97,8 @@ async def run(minutes):
                                     print(f"  [{b.name}] {label}")
                     elif isinstance(m, ResultMessage):
                         cost = m.total_cost_usd or 0
-                        print(f"  --- round done (${cost:.2f}) ---\n")
+                        total_cost += cost
+                        print(f"  --- round done (${cost:.2f} | total ${total_cost:.2f}) ---\n")
                         break
             except KeyboardInterrupt:
                 raise
@@ -104,7 +109,8 @@ async def run(minutes):
                 print("  Time's up.")
                 break
 
-    print(f"\n  Done — {round_num} rounds.")
+    elapsed = (time.time() - start) / 60
+    print(f"\n  Done — {round_num} rounds, {elapsed:.0f}m, ${total_cost:.2f}.")
     print_results()
 
 
