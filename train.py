@@ -106,9 +106,8 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        hidden = 3 * config.n_embd
-        self.c_fc = nn.Linear(config.n_embd, hidden, bias=False)
-        self.c_proj = nn.Linear(hidden, config.n_embd, bias=False)
+        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=False)
+        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=False)
 
     def __call__(self, x):
         x = self.c_fc(x)
@@ -260,7 +259,7 @@ class MuonAdamW:
                         "paths": [],
                         "lr": matrix_lr,
                         "momentum": 0.95,
-                        "ns_steps": 3,
+                        "ns_steps": 5,
                         "beta2": 0.95,
                         "weight_decay": weight_decay,
                     }
@@ -497,7 +496,7 @@ config = GPTConfig(
     vocab_size=vocab_size,
     n_layer=DEPTH,
     n_head=model_dim // HEAD_DIM,
-    n_kv_head=max(2, model_dim // HEAD_DIM // 2),
+    n_kv_head=model_dim // HEAD_DIM,
     n_embd=model_dim,
     window_pattern=WINDOW_PATTERN,
 )
