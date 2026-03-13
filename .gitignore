@@ -19,8 +19,8 @@ AGENTS.md
 # Experimental code/artifacts
 dev/
 
-# Results file
-results.tsv
+# Results file (tracked on experiment branches, ignored on mlx)
+# results.tsv
 
 # Training output log
 run.log
