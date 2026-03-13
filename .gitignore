@@ -24,3 +24,6 @@ results.tsv
 
 # Training output log
 run.log
+
+# Analysis artifacts
+progress.png
