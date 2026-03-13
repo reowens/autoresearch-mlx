@@ -1,9 +1,11 @@
 """
 Autonomous experiment loop. Runs ONE experiment per turn, checks time between turns.
 
-    uv run loop.py          # asks for duration
-    uv run loop.py 6        # 6 hours
-    uv run loop.py 15       # 15 minutes
+    uv run loop.py              # asks for duration
+    uv run loop.py 15           # 15 minutes
+    uv run loop.py 6            # 6 hours
+    uv run loop.py --dry-run    # show state without starting
+    MODEL=sonnet uv run loop.py # use sonnet instead of opus
 """
 
 import asyncio
@@ -55,13 +57,14 @@ async def run(minutes):
     deadline = start + minutes * 60
     round_num = 0
     total_cost = 0.0
+    model = os.environ.get("MODEL", "opus")
 
     opts = ClaudeAgentOptions(
         system_prompt=PROMPT,
         permission_mode="bypassPermissions",
         allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
         cwd=DIR,
-        model="opus",
+        model=model,
     )
 
     if minutes >= 60:
@@ -124,10 +127,30 @@ def parse_duration(raw):
     return val * 60  # hours → minutes
 
 
+def dry_run():
+    """Show current state without starting the loop."""
+    import subprocess
+    branch = "?"
+    try:
+        branch = subprocess.check_output(
+            ["git", "branch", "--show-current"], cwd=DIR, text=True,
+        ).strip()
+    except Exception:
+        pass
+    model = os.environ.get("MODEL", "opus")
+    print(f"\n  branch: {branch}  model: {model}")
+    print_results()
+
+
 def main():
-    if len(sys.argv) > 1:
+    args = [a for a in sys.argv[1:] if a != "--dry-run"]
+    if "--dry-run" in sys.argv:
+        dry_run()
+        return
+
+    if args:
         try:
-            minutes = parse_duration(sys.argv[1])
+            minutes = parse_duration(args[0])
         except ValueError as e:
             sys.exit(f"  Error: {e}")
     else:

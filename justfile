@@ -10,6 +10,10 @@ loop *ARGS:
 train:
     uv run train.py
 
+# Show current state (branch, model, results) without starting
+status:
+    uv run loop.py --dry-run
+
 # Show results scoreboard
 results:
     @cat results.tsv 2>/dev/null || echo "No results.tsv found"

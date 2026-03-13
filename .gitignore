@@ -27,3 +27,7 @@ run.log
 
 # Analysis artifacts
 progress.png
+
+# Internal docs
+docs/
+.osgrep
