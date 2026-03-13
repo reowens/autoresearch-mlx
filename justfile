@@ -1,9 +1,8 @@
 # autoresearch-mlx task runner
 
 # Start autonomous experiment loop (interactive — asks for duration)
-# caffeinate runs in background to prevent macOS sleep without corrupting stdin
 loop:
-    cd {{justfile_directory()}} && caffeinate -dims -w $$ & uv run loop.py; kill %1 2>/dev/null
+    cd {{justfile_directory()}} && uv run loop.py
 
 # Run a single 5-minute training experiment
 train:
