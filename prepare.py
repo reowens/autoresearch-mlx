@@ -30,7 +30,7 @@ import tiktoken
 
 MAX_SEQ_LEN = 2048
 TIME_BUDGET = 300
-EVAL_TOKENS = 3 * 524288
+EVAL_TOKENS = 10 * 524288
 
 # ---------------------------------------------------------------------------
 # Configuration
