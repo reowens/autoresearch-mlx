@@ -119,10 +119,13 @@ def interactive_startup(skip_hours: float | None = None) -> float:
         out(f"  Duration: {skip_hours}h\n")
         return skip_hours
 
+    sys.stdout.write(f"  Duration in hours {DIM}[6]{RESET}: ")
+    sys.stdout.flush()
     try:
-        raw = input(f"  Duration in hours {DIM}[6]{RESET}: ").strip().strip("\r")
+        raw = sys.stdin.readline().strip().strip("\r\n")
         hours = float(raw) if raw else 6.0
-    except (ValueError, EOFError):
+    except (ValueError, EOFError, KeyboardInterrupt):
+        out("")
         hours = 6.0
 
     out("")
