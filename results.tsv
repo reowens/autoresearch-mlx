@@ -1,0 +1,46 @@
+commit	val_bpb	memory_gb	status	description
+47860c7	1.417002	18.6	keep	baseline (MuonAdamW + mx.compile)
+fdf2956	1.360758	21.2	keep	increase depth from 2 to 4 (model_dim 256)
+2a0496d	1.423965	21.1	discard	halve total batch size to 2^13 (device batch 4)
+b3c638d	1.378900	21.4	discard	SwiGLU MLP replacing squared ReLU
+b2fc315	1.373438	21.2	discard	increase matrix LR from 0.04 to 0.06
+805d9ea	1.448067	22.5	discard	depth 5 (model_dim 320) with warmup 0.10
+6008635	1.379877	21.2	discard	reduce warmdown ratio from 0.30 to 0.15
+1381e07	1.425563	21.1	discard	disable value embeddings
+c23c59e	1.373087	21.2	discard	enable VE on all layers (was alternating)
+1d7e7dd	1.388757	20.6	discard	reduce MLP expansion from 4x to 3x
+adbc71e	1.529351	19.5	discard	HEAD_DIM 64->32 (8 heads of 32 instead of 4 of 64)
+b76dc62	1.381566	21.2	discard	cosine warmdown schedule (replace linear decay)
+14a54a2	1.407538	21.2	discard	depth 6 with model_dim 256 (ASPECT_RATIO=42)
+4e18b22	1.379257	21.2	discard	double batch size (DEVICE_BATCH_SIZE=16 TOTAL_BATCH_SIZE=2^15)
+9b60c82	1.375692	21.2	discard	increase matrix LR from 0.04 to 0.05
+02bfdef	1.401088	22.5	discard	increase model width to 320 (ASPECT_RATIO=80)
+c47f355	1.373827	22.2	discard	increase MLP expansion from 4x to 6x
+71d6dc4	3.290099	21.1	discard	weight tying (share wte and lm_head weights)
+c66422b	3.295559	21.1	discard	reduce Muon ns_steps from 5 to 3 (TAINTED: weight tying not reverted)
+73382a2	3.312070	21.1	discard	halve weight decay 0.2->0.1 (TAINTED: weight tying not reverted)
+42caa55	1.364382	21.2	discard	halve weight decay 0.2->0.1 (clean retest)
+2d90f5f	1.372535	21.2	discard	increase embedding LR from 0.6 to 1.0
+5f5d4de	1.362484	21.2	discard	all full-attention layers (WINDOW_PATTERN=L instead of SSSL)
+98e7475	1.363695	21.2	discard	z-loss regularization (1e-4 coefficient)
+42340b3	1.366251	21.2	discard	reduce warmdown ratio from 0.30 to 0.20
+34b5923	1.364753	21.1	discard	full attention + weight decay 0.15 (combining near-misses)
+e124179	1.364023	21.2	discard	SL window pattern (alternating sliding/long attention)
+e97d7a5	1.367038	21.2	discard	reduce Muon ns_steps from 5 to 4 (faster steps more tokens)
+fa8842b	1.657490	21.2	discard	label smoothing 0.1 (too aggressive; hurts eval bpb)
+bf39c34	1.392430	21.2	discard	depth 5 with model_dim 256 (ASPECT_RATIO=51; slower steps hurt)
+4b8902e	1.370069	21.2	discard	RoPE base frequency 10000 -> 50000
+210c2c3	1.372004	21.2	discard	increase logit soft-cap from 15 to 30
+7aa2e44	1.305247	21.1	keep	GQA with n_kv_head=2 (half KV heads for faster steps)
+8829baa	1.283247	21.2	keep	depth 6 with GQA (ASPECT_RATIO=42 keeps model_dim=256)
+7075d0d	1.301109	21.2	discard	depth 8 with model_dim 256 (ASPECT_RATIO=32; slower steps hurt throughput)
+e92cb59	1.330026	21.2	discard	depth 7 with model_dim 256 (ASPECT_RATIO=36; still slower than depth 6)
+7f13638	1.345895	21.1	discard	MQA with n_kv_head=1 (too aggressive; quality loss outweighs speed gain)
+c5fb70a	1.311165	21.2	discard	reduce weight decay 0.2 -> 0.1 (with depth 6 + GQA)
+3ac97fe	0.000000	0.0	crash	wider model 320 (ASPECT_RATIO=48) — n_head=5 not divisible by n_kv_head=2
+ce2e51c	1.407101	21.4	discard	SwiGLU MLP with FLOP-matched 8/3 expansion (depth6 + GQA)
+f0f25bb	1.409689	21.1	discard	full attention (WINDOW_PATTERN=L) with depth 6 + GQA
+a391d79	1.441161	21.2	discard	reduce Muon ns_steps from 5 to 3 (quality loss outweighs speed gain)
+1a5e974	1.418396	21.2	discard	increase matrix LR from 0.04 to 0.05 (depth 6 + GQA)
+1bf6351	1.406486	22.2	discard	parallel attn+MLP (PaLM-style shared norm per block)
+8197f59	1.429589	20.2	discard	depth 8 with 2x MLP expansion (too slim; capacity loss outweighs speed gain)

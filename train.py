@@ -16,6 +16,7 @@ import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_map
 
 from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, evaluate_bpb, make_dataloader
+TIME_BUDGET = int(os.environ.get("TIME_BUDGET", TIME_BUDGET))
 
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
@@ -437,7 +438,7 @@ class MuonAdamW:
 # ---------------------------------------------------------------------------
 
 # Model architecture
-ASPECT_RATIO = 64
+ASPECT_RATIO = 42
 HEAD_DIM = 64
 WINDOW_PATTERN = "SSSL"
 
@@ -454,7 +455,7 @@ WARMDOWN_RATIO = 0.3
 FINAL_LR_FRAC = 0.0
 
 # Model size
-DEPTH = 2
+DEPTH = 6
 DEVICE_BATCH_SIZE = 8
 FINAL_EVAL_BATCH_SIZE = 256
 STARTUP_EXCLUDE_STEPS = 10
@@ -496,7 +497,7 @@ config = GPTConfig(
     vocab_size=vocab_size,
     n_layer=DEPTH,
     n_head=model_dim // HEAD_DIM,
-    n_kv_head=model_dim // HEAD_DIM,
+    n_kv_head=max(1, model_dim // HEAD_DIM // 2),
     n_embd=model_dim,
     window_pattern=WINDOW_PATTERN,
 )
