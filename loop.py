@@ -26,7 +26,37 @@ from claude_agent_sdk.types import StreamEvent
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
-_prompt_path = os.path.join(DIR, "program.md")
+# ── Flywheel config (project-level, optional) ────────────────────────────────
+
+import json as _json
+
+FLYWHEEL_PATH = os.path.join(DIR, "flywheel.json")
+
+_FLYWHEEL_DEFAULTS = {
+    "system_prompt": "program.md",
+    "runner_detect": "uv run train.py",
+    "log_file": "run.log",
+    "results_file": "results.tsv",
+    "metric_name": "val_bpb",
+    "metric_direction": "minimize",
+    "log_regex": r"step\s+\d+\s+\((\d+\.\d+)%\).*loss:\s+([\d.]+).*tok/sec:\s+([\d,]+).*remaining:\s+(\d+)s",
+    "log_groups": ["pct", "loss", "tps", "remaining"],
+}
+
+def load_flywheel_config():
+    if os.path.exists(FLYWHEEL_PATH):
+        try:
+            with open(FLYWHEEL_PATH) as f:
+                return {**_FLYWHEEL_DEFAULTS, **_json.load(f)}
+        except Exception:
+            pass
+    return dict(_FLYWHEEL_DEFAULTS)
+
+FW = load_flywheel_config()
+
+# ── Prompts and constants ─────────────────────────────────────────────────────
+
+_prompt_path = os.path.join(DIR, FW["system_prompt"])
 if not os.path.exists(_prompt_path):
     sys.exit(f"  Error: {_prompt_path} not found")
 with open(_prompt_path) as f:
@@ -36,17 +66,20 @@ DEFAULT_TIME_BUDGET = 5  # minutes
 OVERHEAD_MIN = 2  # ~2 min overhead per run (compile, eval, git)
 MINS_PER_RUN = DEFAULT_TIME_BUDGET + OVERHEAD_MIN
 
-MSG_FIRST = (
+_DEFAULT_MSG_FIRST = (
     "Read results.tsv, train.py, and prepare.py. Run exactly ONE experiment: "
     "modify train.py, commit, train, evaluate, update results.tsv, keep or discard. "
     "IMPORTANT: Run only ONE training run. If it crashes or diverges, log it and STOP. "
     "Do NOT revert and try something else — that counts as a second experiment. "
     "Stop after this single experiment is complete."
 )
-MSG_NEXT = (
+_DEFAULT_MSG_NEXT = (
     "Run exactly ONE more experiment, then stop. "
     "If it crashes or diverges, log it and stop — do not start another."
 )
+
+MSG_FIRST = FW.get("msg_first", _DEFAULT_MSG_FIRST)
+MSG_NEXT = FW.get("msg_next", _DEFAULT_MSG_NEXT)
 
 
 # ── Reporter protocol ────────────────────────────────────────────────────────
@@ -119,7 +152,7 @@ class CLIReporter(LoopReporter):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def print_results():
-    path = os.path.join(DIR, "results.tsv")
+    path = os.path.join(DIR, FW["results_file"])
     if not os.path.exists(path):
         print("  No results.tsv found.")
         return
@@ -243,7 +276,7 @@ async def run(num_runs, reporter=None, config=None):
                                 cmd = inp.get("command", "") if b.name == "Bash" else ""
                                 if b.name == "Bash" and cmd:
                                     log.debug("Bash: %s", cmd[:120])
-                                if "uv run" in cmd and "train.py" in cmd and ">" in cmd:
+                                if FW["runner_detect"] in cmd and ">" in cmd:
                                     log.info("Training detected")
                                     await reporter.on_training_detected()
                                 else:

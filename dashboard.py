@@ -31,10 +31,10 @@ from textual.widgets import (
     Static,
 )
 
-from loop import DIR, MINS_PER_RUN, LoopReporter, run
+from loop import DIR, FW, MINS_PER_RUN, LoopReporter, run
 
-RESULTS_PATH = os.path.join(DIR, "results.tsv")
-RUN_LOG_PATH = os.path.join(DIR, "run.log")
+RESULTS_PATH = os.path.join(DIR, FW["results_file"])
+RUN_LOG_PATH = os.path.join(DIR, FW["log_file"])
 CONFIG_PATH = os.path.join(DIR, ".autoresearch.json")
 CACHE_DIR = os.path.expanduser("~/.cache/autoresearch")
 
