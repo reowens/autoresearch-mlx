@@ -184,7 +184,6 @@ async def run(num_runs, reporter=None, config=None):
         env=env,
         stderr=_on_stderr,
         include_partial_messages=True,
-        max_turns=15,
         max_budget_usd=2.00,
     )
     if api_key:
