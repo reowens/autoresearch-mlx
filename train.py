@@ -438,7 +438,7 @@ class MuonAdamW:
 # ---------------------------------------------------------------------------
 
 # Model architecture
-ASPECT_RATIO = 48
+ASPECT_RATIO = 42
 HEAD_DIM = 64
 WINDOW_PATTERN = "SSSL"
 
