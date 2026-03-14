@@ -622,11 +622,14 @@ class DashboardScreen(Screen):
         # Show thinking indicator after 5s of silence
         thinking_secs = time.time() - self._last_msg_time
         if self.phase == "experimenting" and thinking_secs > 5 and not self._thinking_indicator:
-            indicator = ThinkingIndicator()
-            self._thinking_indicator = indicator
-            # Mount into current round if reporter has one
-            if hasattr(self, '_reporter') and self._reporter._current_round:
-                self._reporter._current_round.mount(indicator)
+            if self._reporter and self._reporter._current_round:
+                indicator = ThinkingIndicator()
+                self._thinking_indicator = indicator
+                self.call_later(self._mount_thinking, indicator)
+
+    async def _mount_thinking(self, indicator: "ThinkingIndicator") -> None:
+        if self._reporter and self._reporter._current_round and indicator.is_attached is False:
+            await self._reporter._current_round.mount(indicator)
 
     def _update_header(self) -> None:
         effort = self.cfg.get("effort", "medium")
