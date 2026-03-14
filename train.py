@@ -482,7 +482,7 @@ HEAD_DIM = 64
 WINDOW_PATTERN = "SSSL"
 
 # Optimization (MuonAdamW: Muon for block matrices, AdamW for embeddings/scalars)
-TOTAL_BATCH_SIZE = 2**14
+TOTAL_BATCH_SIZE = 2**15
 EMBEDDING_LR = 0.6
 UNEMBEDDING_LR = 0.004
 MATRIX_LR = 0.04
