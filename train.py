@@ -603,15 +603,6 @@ while True:
     if grad_accum_steps > 1:
         accum_grads = tree_map(lambda grad: grad * (1.0 / grad_accum_steps), accum_grads)
 
-    # Global gradient norm clipping
-    flat_g = tree_flatten(accum_grads)
-    global_norm = mx.sqrt(sum(mx.sum(g.astype(mx.float32) ** 2) for _, g in flat_g))
-    max_norm = 1.0
-    clip_coef = max_norm / (global_norm + 1e-6)
-    clip_coef = mx.minimum(clip_coef, mx.array(1.0))
-    if float(clip_coef.item()) < 1.0:
-        accum_grads = tree_map(lambda g: g * clip_coef, accum_grads)
-
     progress = min(total_training_time / TIME_BUDGET, 1.0)
     lrm = get_lr_multiplier(progress)
     muon_momentum = get_muon_momentum(step)
