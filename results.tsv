@@ -47,3 +47,4 @@ a391d79	1.441161	21.2	discard	reduce Muon ns_steps from 5 to 3 (quality loss out
 5697a23	1.276848	21.2	keep	remove warmup (WARMUP_RATIO=0; zero-init makes warmup unnecessary)
 a5a8943	1.416208	21.2	discard	reduce matrix LR from 0.04 to 0.03 (worse without warmup)
 f62d5c3	1.428869	21.2	discard	double total batch size 2^15 (grad accum 2x slows steps; fewer optimizer updates)
+ac07e7d	1.442529	21.2	discard	SSLL window pattern (more full-attention layers 4/6 vs 2/6; slower steps)
