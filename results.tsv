@@ -54,3 +54,4 @@ ac07e7d	1.442529	21.2	discard	SSLL window pattern (more full-attention layers 4/
 222dd4d	1.450454	21.2	discard	reduce embedding LR 0.6->0.4 (much worse; embeddings learn too slowly)
 2860146	1.466512	21.2	discard	increase unembedding LR 0.004->0.01 (much worse; destabilizes lm_head)
 c907d68	1.469385	21.2	discard	increase AdamW beta1 0.8->0.9 (much worse; slower adaptation hurts)
+36d3b8f	1.453952	21.2	discard	constant weight decay (no decay-to-zero; much worse; over-regularization late in training)
