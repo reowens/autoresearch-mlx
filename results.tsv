@@ -24,3 +24,4 @@ c66422b	3.295559	21.1	discard	reduce Muon ns_steps from 5 to 3 (TAINTED: weight 
 5f5d4de	1.362484	21.2	discard	all full-attention layers (WINDOW_PATTERN=L instead of SSSL)
 98e7475	1.363695	21.2	discard	z-loss regularization (1e-4 coefficient)
 42340b3	1.366251	21.2	discard	reduce warmdown ratio from 0.30 to 0.20
+34b5923	1.364753	21.1	discard	full attention + weight decay 0.15 (combining near-misses)
