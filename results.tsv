@@ -34,3 +34,4 @@ bf39c34	1.392430	21.2	discard	depth 5 with model_dim 256 (ASPECT_RATIO=51; slowe
 7aa2e44	1.305247	21.1	keep	GQA with n_kv_head=2 (half KV heads for faster steps)
 8829baa	1.283247	21.2	keep	depth 6 with GQA (ASPECT_RATIO=42 keeps model_dim=256)
 7075d0d	1.301109	21.2	discard	depth 8 with model_dim 256 (ASPECT_RATIO=32; slower steps hurt throughput)
+e92cb59	1.330026	21.2	discard	depth 7 with model_dim 256 (ASPECT_RATIO=36; still slower than depth 6)
