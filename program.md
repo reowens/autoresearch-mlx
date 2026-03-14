@@ -104,7 +104,7 @@ Each experiment:
 6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
 7. Record the results in the tsv
 8. If val_bpb improved (lower), `git add autoresearch-mlx/results.tsv && git commit --amend --no-edit` to include the log, advancing the branch
-9. If val_bpb is equal or worse, record the discard commit hash, then `git reset --hard <previous kept commit>` to discard it cleanly
+9. If val_bpb is equal or worse, record the discard in results.tsv, then revert train.py to the last kept state: `git checkout HEAD~1 -- autoresearch-mlx/train.py && git add autoresearch-mlx/train.py autoresearch-mlx/results.tsv && git commit -m "discard: <description>"`. Do NOT use `git reset --hard` — it destroys other files on the branch.
 
 You are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. And you're advancing the branch so that you can iterate. If you feel like you're getting stuck in some way, you can rewind but you should probably do this very very sparingly (if ever).
 
