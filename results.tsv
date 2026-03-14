@@ -57,3 +57,4 @@ c907d68	1.469385	21.2	discard	increase AdamW beta1 0.8->0.9 (much worse; slower 
 36d3b8f	1.453952	21.2	discard	constant weight decay (no decay-to-zero; much worse; over-regularization late in training)
 297f0b5	1.584802	23.7	discard	widen model to 384 dim (ASPECT_RATIO=64; 6 heads 3 KV heads; much worse)
 ccc3adb	1.597130	21.2	discard	global gradient norm clipping max_norm=1.0 (too aggressive + .item() sync slowed training)
+3f0797d	1.516801	21.2	discard	remove logit soft-capping (much worse; soft-cap stabilizes training)
