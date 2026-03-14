@@ -497,7 +497,7 @@ config = GPTConfig(
     vocab_size=vocab_size,
     n_layer=DEPTH,
     n_head=model_dim // HEAD_DIM,
-    n_kv_head=max(1, model_dim // HEAD_DIM // 2),
+    n_kv_head=1,  # MQA: single KV head for maximum throughput
     n_embd=model_dim,
     window_pattern=WINDOW_PATTERN,
 )
