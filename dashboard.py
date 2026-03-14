@@ -8,6 +8,7 @@ Unified TUI: quick-launch → optional wizard → experiment dashboard.
 import asyncio
 import datetime
 import json
+import logging
 import os
 import re
 import subprocess
@@ -16,6 +17,7 @@ import time
 
 from textual import on, work
 from textual.app import App, ComposeResult
+from textual.color import Gradient
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import Screen
@@ -27,6 +29,7 @@ from textual.widgets import (
     Label,
     ProgressBar,
     RichLog,
+    Rule,
     Select,
     Static,
 )
@@ -42,6 +45,8 @@ STEP_RE = re.compile(
     r"step\s+\d+\s+\(([\d.]+)%\)\s+\|\s+loss:\s+([\d.]+).*?"
     r"tok/sec:\s+([\d,]+).*?remaining:\s+(\d+)s"
 )
+
+TRAIN_GRADIENT = Gradient.from_colors("#22ccbb", "#44dd88", "#99dd55", "#eedd00", "#ee9944")
 
 DEFAULTS = {
     "model": "opus",
@@ -118,11 +123,17 @@ def est_str(n):
     return f"~{est / 60:.1f}h" if est >= 60 else f"~{est}m"
 
 
+def fmt_elapsed(seconds):
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    if h:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
 # ── QuickLaunchScreen ─────────────────────────────────────────────────────────
 
 class QuickLaunchScreen(Screen):
-    """Compact launch screen: shows last config, editable run count, Start/Settings."""
-
     CSS = """
     QuickLaunchScreen { align: center middle; }
     #ql-box {
@@ -166,7 +177,7 @@ class QuickLaunchScreen(Screen):
                     ago_str = f"{ago.total_seconds() / 3600:.1f}h ago"
                 else:
                     ago_str = f"{int(ago.days)}d ago"
-                info += f" · last run {ago_str}"
+                info += f" · {ago_str}"
             except ValueError:
                 pass
 
@@ -217,16 +228,12 @@ class QuickLaunchScreen(Screen):
     def _wizard_done(self, cfg):
         if cfg:
             self.cfg = cfg
-            # Wizard was pushed on top of us — it already dismissed itself.
-            # Replace ourselves with a fresh QuickLaunchScreen to reflect new config.
             self.app.switch_screen(QuickLaunchScreen(cfg))
 
 
 # ── WizardScreen ──────────────────────────────────────────────────────────────
 
 class WizardScreen(Screen):
-    """Settings screen: branch, model, effort, API key."""
-
     CSS = """
     WizardScreen { align: center middle; }
     #wiz-box {
@@ -265,7 +272,6 @@ class WizardScreen(Screen):
         with Vertical(id="wiz-box"):
             yield Static("Settings", classes="wiz-heading")
 
-            # Data check
             if data_ok():
                 shards = len([f for f in os.listdir(os.path.join(CACHE_DIR, "data"))
                               if f.endswith(".parquet")])
@@ -281,14 +287,11 @@ class WizardScreen(Screen):
             yield Select(models, value=self.cfg.get("model", "opus"), id="wiz-model")
 
             yield Label("Effort:")
-            yield Select(efforts, value=self.cfg.get("effort", "max"), id="wiz-effort")
+            yield Select(efforts, value=self.cfg.get("effort", "high"), id="wiz-effort")
 
             api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-            yield Label("API Key (blank = use subscription):")
-            yield Input(
-                placeholder="sk-ant-...", password=True,
-                id="wiz-apikey", value=api_key,
-            )
+            yield Label("API Key (blank = subscription):")
+            yield Input(placeholder="sk-ant-...", password=True, id="wiz-apikey", value=api_key)
 
             yield Horizontal(
                 Button("Back", id="wiz-back"),
@@ -332,7 +335,7 @@ class WizardScreen(Screen):
 
         cfg = {
             "model": str(model_val) if model_val != Select.BLANK else "opus",
-            "effort": str(effort_val) if effort_val != Select.BLANK else "max",
+            "effort": str(effort_val) if effort_val != Select.BLANK else "high",
             "num_runs": self.cfg.get("num_runs", 10),
             "branch": branch,
             "api_key": self.query_one("#wiz-apikey", Input).value.strip(),
@@ -347,13 +350,13 @@ class DashboardReporter(LoopReporter):
     def __init__(self, screen: "DashboardScreen"):
         self.screen = screen
 
-    def on_start(self, num_runs, model):
-        self.screen.num_runs = num_runs
-        self.screen.model_name = model
-
     def _touch(self):
         self.screen._last_msg_time = time.time()
         self.screen._thinking_dots = 0
+
+    def on_start(self, num_runs, model):
+        self.screen.num_runs = num_runs
+        self.screen.model_name = model
 
     def on_round_start(self, round_num, num_runs, elapsed_min, total_cost):
         self._touch()
@@ -361,9 +364,10 @@ class DashboardReporter(LoopReporter):
         self.screen.total_cost = total_cost
         self.screen.phase = "experimenting"
         self.screen._training_shown = False
-        self.screen.query_one("#activity", RichLog).write(
-            f"[bold]━━━ Round {round_num}/{num_runs} ━━━[/bold]"
-        )
+        log = self.screen.query_one("#activity", RichLog)
+        if round_num > 1:
+            log.write("")
+        log.write(f"[bold]── Round {round_num}/{num_runs} ──[/bold]")
 
     def on_text(self, text):
         self._touch()
@@ -371,8 +375,11 @@ class DashboardReporter(LoopReporter):
 
     def on_tool_use(self, name, label):
         self._touch()
+        colors = {"Read": "dim", "Edit": "yellow", "Write": "yellow",
+                  "Bash": "cyan", "Glob": "dim", "Grep": "dim"}
+        color = colors.get(name, "white")
         self.screen.query_one("#activity", RichLog).write(
-            f"  [bold cyan]\\[{name}][/bold cyan] {label}"
+            f"  [{color}]{name}[/{color}] {label}"
         )
 
     def on_training_detected(self):
@@ -383,31 +390,34 @@ class DashboardReporter(LoopReporter):
         self.screen.phase = "training"
         self.screen.query_one("#train-panel").display = True
         self.screen.query_one("#train-bar", ProgressBar).update(total=100, progress=0)
+        self.screen.query_one("#train-stats", Static).update(" starting...")
         self.screen.query_one("#activity", RichLog).write(
-            "  [bold green]> training (~5 min)...[/bold green]"
+            "  [bold green]▶ training[/bold green]"
         )
 
     def on_round_done(self, round_cost, total_cost):
+        self._touch()
         self.screen.total_cost = total_cost
         self.screen.phase = "idle"
         self.screen.query_one("#train-panel").display = False
         note = " (included)" if round_cost == 0 else ""
         self.screen.query_one("#activity", RichLog).write(
-            f"  [dim]── done (${round_cost:.2f}{note} | ${total_cost:.2f}) ──[/dim]"
+            f"  [green]✓[/green] done · ${round_cost:.2f}{note}"
         )
         self.screen.refresh_results()
 
     def on_round_failed(self, error):
+        self._touch()
         self.screen.phase = "error"
         self.screen.query_one("#train-panel").display = False
         self.screen.query_one("#activity", RichLog).write(
-            f"  [bold red]── failed: {error} ──[/bold red]"
+            f"  [bold red]✗ failed: {error}[/bold red]"
         )
 
     def on_finished(self, num_runs, elapsed_min, total_cost):
         self.screen.phase = "done"
         self.screen.query_one("#activity", RichLog).write(
-            f"\n[bold]Done — {num_runs} rounds, {elapsed_min:.0f}m, ${total_cost:.2f}.[/bold]"
+            f"\n[bold]Done — {num_runs} rounds · {elapsed_min:.0f}m · ${total_cost:.2f}[/bold]"
         )
 
     def on_stderr(self, line):
@@ -419,20 +429,51 @@ class DashboardReporter(LoopReporter):
 class DashboardScreen(Screen):
     CSS = """
     DashboardScreen { layout: vertical; }
+
     #dash-header {
-        dock: top; height: 1;
-        background: $primary; color: $text; text-style: bold; padding: 0 1;
+        dock: top;
+        height: 1;
+        background: $primary;
+        color: $text;
+        text-style: bold;
+        padding: 0 1;
     }
     #dash-status {
-        dock: top; height: 1;
-        background: $panel; color: $text-muted; padding: 0 1;
+        dock: top;
+        height: 1;
+        background: $panel;
+        padding: 0 1;
     }
-    #activity { height: 1fr; min-height: 6; }
+
+    #activity {
+        height: 1fr;
+        min-height: 8;
+        scrollbar-size: 1 1;
+    }
+
     #train-panel {
-        height: auto; max-height: 2;
-        padding: 0 1; background: $surface; display: none;
+        dock: bottom;
+        height: 3;
+        padding: 0 1;
+        background: $surface;
+        display: none;
     }
-    #results { height: auto; max-height: 40%; border-top: heavy $primary; }
+    #train-bar {
+        width: 1fr;
+    }
+    #train-stats {
+        height: 1;
+        color: $text-muted;
+    }
+
+    #results {
+        dock: bottom;
+        height: auto;
+        max-height: 40%;
+    }
+    DataTable > .datatable--odd-row {
+        background: $surface;
+    }
     """
 
     BINDINGS = [
@@ -460,12 +501,12 @@ class DashboardScreen(Screen):
         yield Static(id="dash-header")
         yield Static(id="dash-status")
         yield RichLog(highlight=True, markup=True, id="activity")
-        yield Horizontal(
-            ProgressBar(total=100, show_eta=False, id="train-bar"),
+        yield Vertical(
+            ProgressBar(total=100, show_eta=False, gradient=TRAIN_GRADIENT, id="train-bar"),
             Static("", id="train-stats"),
             id="train-panel",
         )
-        yield DataTable(id="results")
+        yield DataTable(id="results", zebra_stripes=True)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -475,20 +516,23 @@ class DashboardScreen(Screen):
         self.set_interval(1.0, self._tick)
         self.run_loop()
 
+    # ── Periodic ──
+
     def _tick(self) -> None:
+        self._update_header()
         self._update_status()
         if self.phase == "training":
             self._poll_run_log()
 
     def _update_header(self) -> None:
-        effort = self.cfg.get("effort", "max")
+        effort = self.cfg.get("effort", "high")
+        elapsed = fmt_elapsed(time.time() - self.start_time)
         r = f"Round {self.round_num}/{self.num_runs}" if self.num_runs else "Starting"
         self.query_one("#dash-header", Static).update(
-            f" {self._branch}  ·  {self.model_name}/{effort}  ·  {r}"
+            f" {self._branch}  ·  {self.model_name}/{effort}  ·  {r}  ·  {elapsed}"
         )
 
     def _update_status(self) -> None:
-        elapsed = (time.time() - self.start_time) / 60
         cost = f"${self.total_cost:.2f}"
         if self.total_cost == 0 and self.round_num > 0:
             cost += " (included)"
@@ -498,16 +542,17 @@ class DashboardScreen(Screen):
             self._thinking_dots = (self._thinking_dots % 3) + 1
             dots = "·" * self._thinking_dots + " " * (3 - self._thinking_dots)
             phase_str = f"thinking {dots} ({int(thinking_secs)}s)"
-            icon = "◉"
         elif self.phase == "training":
-            icon, phase_str = "▶", "training"
+            phase_str = "▶ training"
+        elif self.phase == "done":
+            phase_str = "✓ done"
+        elif self.phase == "error":
+            phase_str = "✗ error"
         else:
-            icon = {"starting": "○", "idle": "○", "error": "✗", "done": "✓",
-                    "experimenting": "◉"}.get(self.phase, "○")
             phase_str = self.phase
 
         self.query_one("#dash-status", Static).update(
-            f" {elapsed:.0f}m elapsed  ·  {cost}  ·  {icon} {phase_str}"
+            f" {cost}  ·  {phase_str}"
         )
 
     def _poll_run_log(self) -> None:
@@ -523,11 +568,13 @@ class DashboardScreen(Screen):
                     pct, loss, tps, rem = float(m.group(1)), m.group(2), m.group(3), m.group(4)
                     self.query_one("#train-bar", ProgressBar).update(total=100, progress=pct)
                     self.query_one("#train-stats", Static).update(
-                        f" loss {loss}  ·  {tps} tok/s  ·  {rem}s left"
+                        f" {pct:.0f}%  ·  loss {loss}  ·  {tps} tok/s  ·  {rem}s left"
                     )
                     break
         except Exception:
             pass
+
+    # ── Reactive watchers ──
 
     def watch_round_num(self) -> None:
         self._update_header()
@@ -535,6 +582,8 @@ class DashboardScreen(Screen):
         self._update_header()
     def watch_model_name(self) -> None:
         self._update_header()
+
+    # ── Results ──
 
     def refresh_results(self) -> None:
         table = self.query_one("#results", DataTable)
@@ -546,21 +595,35 @@ class DashboardScreen(Screen):
         if len(lines) < 2:
             return
         table.add_columns("", "val_bpb", "mem", "description")
+        best_bpb = None
+        kept_lines = [l for l in lines[1:] if "\tkeep\t" in l.split("\t")[3] if len(l.split("\t")) >= 5]
+        if kept_lines:
+            best_bpb = min(float(l.split("\t")[1]) for l in kept_lines)
         for line in lines[1:]:
             cols = line.split("\t")
             if len(cols) >= 5:
-                icon = {"keep": "[green]✓[/]", "discard": "[dim]✗[/]", "crash": "[red]![/]"}.get(cols[3], "?")
-                table.add_row(icon, cols[1], cols[2], cols[4])
+                status = cols[3]
+                bpb = cols[1]
+                is_best = best_bpb and float(bpb) == best_bpb and status == "keep"
+                if is_best:
+                    icon = "[bold green]★[/]"
+                elif status == "keep":
+                    icon = "[green]✓[/]"
+                elif status == "discard":
+                    icon = "[dim]✗[/]"
+                else:
+                    icon = "[red]![/]"
+                table.add_row(icon, bpb, cols[2], cols[4])
 
     def action_do_refresh(self) -> None:
         self.refresh_results()
+
     def action_quit_app(self) -> None:
         self.workers.cancel_all()
         self.app.exit()
 
     @work(exclusive=True)
     async def run_loop(self) -> None:
-        import logging
         log = logging.getLogger("dashboard.run_loop")
         reporter = DashboardReporter(self)
         log.info("run_loop started, num_runs=%s", self.cfg.get("num_runs"))
@@ -594,7 +657,6 @@ class AutoresearchApp(App):
         self.num_runs_override = num_runs_override
 
     def on_mount(self) -> None:
-        import logging
         log = logging.getLogger("dashboard.app")
         cfg = load_config()
         log.info("Config loaded: %s, pushing: %s",
@@ -628,18 +690,16 @@ LOG_FILE = os.path.join(DIR, "dashboard.log")
 
 
 def main():
-    import logging
-
-    # File logger — flushes every line so `tail -f dashboard.log` works live
     handler = logging.FileHandler(LOG_FILE, mode="w")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     handler.setLevel(logging.DEBUG)
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)
     root.addHandler(handler)
-    # Force immediate flush on every log line
-    handler.stream.reconfigure(line_buffering=True)
-    log = logging.getLogger("dashboard")
+    try:
+        handler.stream.reconfigure(line_buffering=True)
+    except AttributeError:
+        pass
 
     num_runs = None
     if len(sys.argv) > 1:
@@ -653,11 +713,11 @@ def main():
     try:
         AutoresearchApp(num_runs_override=num_runs).run()
     except Exception:
-        log.exception("Fatal error")
+        logging.getLogger("dashboard").exception("Fatal error")
         raise
     finally:
         if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 0:
-            print(f"\n  Log written to {LOG_FILE}", file=sys.stderr)
+            print(f"\n  Log: {LOG_FILE}", file=sys.stderr)
 
 
 if __name__ == "__main__":
