@@ -27,3 +27,4 @@ c66422b	3.295559	21.1	discard	reduce Muon ns_steps from 5 to 3 (TAINTED: weight 
 34b5923	1.364753	21.1	discard	full attention + weight decay 0.15 (combining near-misses)
 e124179	1.364023	21.2	discard	SL window pattern (alternating sliding/long attention)
 e97d7a5	1.367038	21.2	discard	reduce Muon ns_steps from 5 to 4 (faster steps more tokens)
+fa8842b	1.657490	21.2	discard	label smoothing 0.1 (too aggressive; hurts eval bpb)
