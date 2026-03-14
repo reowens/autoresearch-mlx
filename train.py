@@ -516,8 +516,8 @@ def get_muon_momentum(step):
 
 
 def get_weight_decay(progress):
-    """Weight decay decays to 0 over training."""
-    return WEIGHT_DECAY * (1 - progress)
+    """Constant weight decay throughout training."""
+    return WEIGHT_DECAY
 
 
 t_start = time.time()
