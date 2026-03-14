@@ -29,3 +29,4 @@ e124179	1.364023	21.2	discard	SL window pattern (alternating sliding/long attent
 e97d7a5	1.367038	21.2	discard	reduce Muon ns_steps from 5 to 4 (faster steps more tokens)
 fa8842b	1.657490	21.2	discard	label smoothing 0.1 (too aggressive; hurts eval bpb)
 bf39c34	1.392430	21.2	discard	depth 5 with model_dim 256 (ASPECT_RATIO=51; slower steps hurt)
+4b8902e	1.370069	21.2	discard	RoPE base frequency 10000 -> 50000
