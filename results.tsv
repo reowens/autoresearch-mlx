@@ -61,3 +61,4 @@ ccc3adb	1.597130	21.2	discard	global gradient norm clipping max_norm=1.0 (too ag
 96894f8	1.411738	21.2	discard	reduce logit soft-cap from 15 to 12 (tighter cap over-constrains logits)
 5e18a9a	1.361784	26.4	discard	remove x0 residual connection (1.362 vs 1.277; x0 highway essential for quality)
 2a94e0b	1.295582	26.4	discard	init scale 0.68 (upstream narrow optimum; worse on our hardware/depth)
+b428bc2	1.317104	21.2	discard	FINAL_LR_FRAC 0.05 (LR floors at 5%; restored correct baseline with x0 residual)
