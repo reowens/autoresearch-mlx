@@ -404,12 +404,12 @@ class DashboardReporter(LoopReporter):
     async def _flush_text(self):
         if self._text_buf.strip() and self._current_round:
             text = self._clean_markdown(self._text_buf.strip())
-            for line in text.split("\n")[:3]:
+            for line in text.split("\n"):
                 line = line.strip()
                 if line:
                     css = self._classify_line(line)
                     await self._current_round.mount(
-                        Static(line[:120], classes=css)
+                        Static(line, classes=css)
                     )
             self._text_buf = ""
 
@@ -447,7 +447,7 @@ class DashboardReporter(LoopReporter):
                 if line:
                     css = self._classify_line(line)
                     await self._current_round.mount(
-                        Static(line[:120], classes=css)
+                        Static(line, classes=css)
                     )
 
     async def on_text_delta(self, chunk):
@@ -459,7 +459,7 @@ class DashboardReporter(LoopReporter):
             if line and self._current_round:
                 css = self._classify_line(line)
                 await self._current_round.mount(
-                    Static(line[:120], classes=css)
+                    Static(line, classes=css)
                 )
 
     async def on_tool_start(self, name):
