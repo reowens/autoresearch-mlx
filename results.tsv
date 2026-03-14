@@ -10,3 +10,4 @@ b2fc315	1.373438	21.2	discard	increase matrix LR from 0.04 to 0.06
 c23c59e	1.373087	21.2	discard	enable VE on all layers (was alternating)
 1d7e7dd	1.388757	20.6	discard	reduce MLP expansion from 4x to 3x
 adbc71e	1.529351	19.5	discard	HEAD_DIM 64->32 (8 heads of 32 instead of 4 of 64)
+b76dc62	1.381566	21.2	discard	cosine warmdown schedule (replace linear decay)
