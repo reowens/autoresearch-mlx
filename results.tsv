@@ -20,3 +20,4 @@ c47f355	1.373827	22.2	discard	increase MLP expansion from 4x to 6x
 c66422b	3.295559	21.1	discard	reduce Muon ns_steps from 5 to 3 (TAINTED: weight tying not reverted)
 73382a2	3.312070	21.1	discard	halve weight decay 0.2->0.1 (TAINTED: weight tying not reverted)
 42caa55	1.364382	21.2	discard	halve weight decay 0.2->0.1 (clean retest)
+2d90f5f	1.372535	21.2	discard	increase embedding LR from 0.6 to 1.0
