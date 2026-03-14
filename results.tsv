@@ -44,3 +44,4 @@ a391d79	1.441161	21.2	discard	reduce Muon ns_steps from 5 to 3 (quality loss out
 1a5e974	1.418396	21.2	discard	increase matrix LR from 0.04 to 0.05 (depth 6 + GQA)
 1bf6351	1.406486	22.2	discard	parallel attn+MLP (PaLM-style shared norm per block)
 8197f59	1.429589	20.2	discard	depth 8 with 2x MLP expansion (too slim; capacity loss outweighs speed gain)
+5697a23	1.276848	21.2	keep	remove warmup (WARMUP_RATIO=0; zero-init makes warmup unnecessary)

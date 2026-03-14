@@ -474,7 +474,9 @@ class DashboardReporter(LoopReporter):
             return
         await self._flush_reads()
         await self._flush_text()
-        if self._training_widget and self.screen.phase == "training":
+        # Only end training phase on Bash commands (actual experiment actions)
+        # SDK-internal tools (ToolSearch, TaskOutput) can fire during training
+        if self._training_widget and self.screen.phase == "training" and name == "Bash":
             self.screen.phase = "experimenting"
             self._training_widget.stop()
         if not self._current_round:
