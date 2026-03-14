@@ -24,4 +24,10 @@ class ToolAction(VerticalGroup):
 
     def compose(self) -> ComposeResult:
         icon = ICONS.get(self.tool_name, "🔧")
-        yield Static(f"{icon} {self.tool_label}", classes="tool-header")
+        # For Bash, just show the label (description). For others, show Name + label.
+        if self.tool_name == "Bash":
+            yield Static(f"{icon}  {self.tool_label}", classes="tool-header")
+        elif self.tool_name == "Read":
+            yield Static(f"{icon}  {self.tool_label}", classes="tool-header tool-dim")
+        else:
+            yield Static(f"{icon}  {self.tool_name} {self.tool_label}", classes="tool-header")

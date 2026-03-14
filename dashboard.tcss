@@ -40,8 +40,11 @@ ToolAction {
 }
 
 .tool-header {
-    color: $text-muted;
     height: 1;
+}
+
+.tool-dim {
+    color: $text-muted;
 }
 
 /* Training progress */

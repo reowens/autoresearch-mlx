@@ -410,10 +410,17 @@ class DashboardReporter(LoopReporter):
         await self.screen.query_one(ExperimentWindow).post_widget(self._current_round)
         self.screen._update_session_bar()
 
+    def _clean_markdown(self, text):
+        """Strip markdown formatting for plain text display."""
+        text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+        text = re.sub(r'`(.+?)`', r'\1', text)
+        return text
+
     async def on_text(self, text):
         self._touch()
         await self._flush_reads()
         if not self._text_buf and self._current_round:
+            text = self._clean_markdown(text)
             for line in text.strip().split("\n")[:3]:
                 line = line.strip()
                 if line:
@@ -426,7 +433,7 @@ class DashboardReporter(LoopReporter):
         self._text_buf += chunk
         while "\n" in self._text_buf:
             line, self._text_buf = self._text_buf.split("\n", 1)
-            line = line.strip()
+            line = self._clean_markdown(line.strip())
             if line and self._current_round:
                 await self._current_round.mount(
                     Static(line[:120], classes="thinking-text")
@@ -658,10 +665,12 @@ class DashboardScreen(Screen):
                     icon = "[bold green]★[/]"
                 elif status == "keep":
                     icon = "[green]✓[/]"
-                elif delta < 0.02:
-                    icon = "[yellow]~[/]"
+                elif status == "crash" or float(bpb) == 0:
+                    icon = "[red]![/]"
                 elif delta > 1.0:
                     icon = "[red]![/]"
+                elif delta < 0.02:
+                    icon = "[yellow]~[/]"
                 else:
                     icon = "[dim]✗[/]"
                 table.add_row(icon, bpb, cols[2], cols[4])
