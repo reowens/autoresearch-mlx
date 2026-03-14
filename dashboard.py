@@ -398,15 +398,22 @@ class DashboardReporter(LoopReporter):
             self._read_buffer.append(label)
             return
         self._flush_reads()
+        # After training ends, next tool call means we're back to experimenting
+        if self.screen._training_shown and self.screen.phase == "training":
+            self.screen.phase = "experimenting"
+            self.screen.query_one("#train-row").display = False
         # Extract experiment description from commit messages
         if name == "Bash" and "experiment:" in str(label):
             desc = str(label).split("experiment:")[-1].strip().rstrip('"').rstrip("'")
             if desc:
-                self._log(f"  [bold]Experiment: {desc}[/bold]")
-        colors = {"Edit": "yellow", "Write": "yellow", "Bash": "cyan",
-                  "Glob": "dim", "Grep": "dim"}
-        color = colors.get(name, "white")
-        self._log(f"  [{color}]{name}[/{color}] {label}")
+                self._log(f"  [bold]📋 {desc}[/bold]")
+        # Display: Bash shows description only, others show Name + label
+        if name == "Bash":
+            self._log(f"  [cyan]{label}[/cyan]")
+        elif name in ("Edit", "Write"):
+            self._log(f"  [yellow]{name}[/yellow] {label}")
+        else:
+            self._log(f"  [dim]{name} {label}[/dim]")
 
     def on_training_detected(self):
         self._touch()
@@ -483,7 +490,7 @@ class DashboardScreen(Screen):
     #activity {
         height: 1fr;
         min-height: 6;
-        scrollbar-size: 1 1;
+        scrollbar-size: 0 0;
         border-bottom: solid $primary;
     }
 
@@ -628,13 +635,30 @@ class DashboardScreen(Screen):
         if len(lines) < 2:
             return
         table.add_columns("", "val_bpb", "mem", "description")
-        best_bpb = None
         data_lines = [l for l in lines[1:] if len(l.split("\t")) >= 5]
-        kept = [l for l in data_lines if l.split("\t")[3] == "keep"]
-        if kept:
-            best_bpb = min(float(l.split("\t")[1]) for l in kept)
-        for line in data_lines:
-            cols = line.split("\t")
+        rows = [l.split("\t") for l in data_lines]
+        kept = [r for r in rows if r[3] == "keep"]
+        best_bpb = min((float(r[1]) for r in kept), default=None) if kept else None
+        # Find best, baseline (first kept), and rest
+        best_row = None
+        baseline_row = None
+        other_rows = []
+        for r in rows:
+            is_best = best_bpb and r[3] == "keep" and float(r[1]) == best_bpb
+            if is_best and not best_row:
+                best_row = r
+            elif r == rows[0] and r[3] == "keep":
+                baseline_row = r
+            else:
+                other_rows.append(r)
+        # Sort: best, baseline, then rest reversed (most recent first)
+        sorted_rows = []
+        if best_row:
+            sorted_rows.append(best_row)
+        if baseline_row and baseline_row != best_row:
+            sorted_rows.append(baseline_row)
+        sorted_rows.extend(reversed(other_rows))
+        for cols in sorted_rows:
             status, bpb = cols[3], cols[1]
             is_best = best_bpb and status == "keep" and float(bpb) == best_bpb
             if is_best:
