@@ -107,8 +107,8 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=False)
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=False)
+        self.c_fc = nn.Linear(config.n_embd, 2 * config.n_embd, bias=False)
+        self.c_proj = nn.Linear(2 * config.n_embd, config.n_embd, bias=False)
 
     def __call__(self, x):
         x = self.c_fc(x)
@@ -438,7 +438,7 @@ class MuonAdamW:
 # ---------------------------------------------------------------------------
 
 # Model architecture
-ASPECT_RATIO = 42
+ASPECT_RATIO = 32
 HEAD_DIM = 64
 WINDOW_PATTERN = "SSSL"
 
@@ -455,7 +455,7 @@ WARMDOWN_RATIO = 0.3
 FINAL_LR_FRAC = 0.0
 
 # Model size
-DEPTH = 6
+DEPTH = 8
 DEVICE_BATCH_SIZE = 8
 FINAL_EVAL_BATCH_SIZE = 256
 STARTUP_EXCLUDE_STEPS = 10
