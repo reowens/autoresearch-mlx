@@ -262,10 +262,13 @@ class WizardScreen(Screen):
     def compose(self) -> ComposeResult:
         branches = get_branches()
         current = get_branch()
+        # Always include current branch in options even if not autoresearch/*
+        if current and current not in branches:
+            branches.insert(0, current)
         branch_opts = [(b, b) for b in branches] + [("+ New branch", "__new__")]
         default_b = self.cfg.get("branch", current)
         if default_b not in branches:
-            default_b = current if current in branches else Select.BLANK
+            default_b = branches[0] if branches else "__new__"
 
         models = [("opus", "opus"), ("sonnet", "sonnet"), ("haiku", "haiku")]
         efforts = [("high", "high"), ("medium", "medium"), ("low", "low")]
