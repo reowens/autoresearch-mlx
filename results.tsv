@@ -42,3 +42,4 @@ ce2e51c	1.407101	21.4	discard	SwiGLU MLP with FLOP-matched 8/3 expansion (depth6
 f0f25bb	1.409689	21.1	discard	full attention (WINDOW_PATTERN=L) with depth 6 + GQA
 a391d79	1.441161	21.2	discard	reduce Muon ns_steps from 5 to 3 (quality loss outweighs speed gain)
 1a5e974	1.418396	21.2	discard	increase matrix LR from 0.04 to 0.05 (depth 6 + GQA)
+1bf6351	1.406486	22.2	discard	parallel attn+MLP (PaLM-style shared norm per block)
