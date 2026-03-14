@@ -45,7 +45,7 @@ STEP_RE = re.compile(
 
 DEFAULTS = {
     "model": "opus",
-    "effort": "max",
+    "effort": "high",
     "num_runs": 10,
     "branch": "",
     "api_key": "",
@@ -155,11 +155,26 @@ class QuickLaunchScreen(Screen):
             if results["best_bpb"]:
                 info += f" · best {results['best_bpb']:.4f}"
 
+        last = self.cfg.get("last_run", "")
+        if last:
+            try:
+                dt = datetime.datetime.fromisoformat(last)
+                ago = datetime.datetime.now() - dt
+                if ago.total_seconds() < 3600:
+                    ago_str = f"{int(ago.total_seconds() / 60)}m ago"
+                elif ago.total_seconds() < 86400:
+                    ago_str = f"{ago.total_seconds() / 3600:.1f}h ago"
+                else:
+                    ago_str = f"{int(ago.days)}d ago"
+                info += f" · last run {ago_str}"
+            except ValueError:
+                pass
+
         with Vertical(id="ql-box"):
             yield Static("autoresearch-mlx", id="ql-title")
             yield Static(info)
             yield Static(
-                f"{self.cfg.get('model', 'opus')}/{self.cfg.get('effort', 'max')}",
+                f"{self.cfg.get('model', 'opus')}/{self.cfg.get('effort', 'high')}",
                 id="ql-config",
             )
             yield Label(f"Runs ({est_str(num)}):")
@@ -170,6 +185,9 @@ class QuickLaunchScreen(Screen):
                 id="ql-buttons",
             )
 
+    def on_mount(self) -> None:
+        self.query_one("#ql-runs-input", Input).focus()
+
     @on(Input.Changed, "#ql-runs-input")
     def update_label(self, event: Input.Changed):
         try:
@@ -177,6 +195,10 @@ class QuickLaunchScreen(Screen):
             self.query_one("Label").update(f"Runs ({est_str(n)}):")
         except ValueError:
             pass
+
+    @on(Input.Submitted, "#ql-runs-input")
+    def on_enter(self, event: Input.Submitted):
+        self.do_start()
 
     @on(Button.Pressed, "#ql-start")
     def do_start(self):
@@ -238,7 +260,7 @@ class WizardScreen(Screen):
             default_b = current if current in branches else Select.BLANK
 
         models = [("opus", "opus"), ("sonnet", "sonnet"), ("haiku", "haiku")]
-        efforts = [("max", "max"), ("high", "high"), ("medium", "medium")]
+        efforts = [("high", "high"), ("medium", "medium"), ("low", "low")]
 
         with Vertical(id="wiz-box"):
             yield Static("Settings", classes="wiz-heading")
@@ -262,12 +284,9 @@ class WizardScreen(Screen):
             yield Select(efforts, value=self.cfg.get("effort", "max"), id="wiz-effort")
 
             api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-            if api_key:
-                yield Label("API Key: set via ANTHROPIC_API_KEY env var")
-            else:
-                yield Label("API Key (set ANTHROPIC_API_KEY env var, or enter):")
+            yield Label("API Key (blank = use subscription):")
             yield Input(
-                placeholder="sk-ant-... (blank = subscription)", password=True,
+                placeholder="sk-ant-...", password=True,
                 id="wiz-apikey", value=api_key,
             )
 
@@ -287,6 +306,10 @@ class WizardScreen(Screen):
     @on(Button.Pressed, "#wiz-back")
     def go_back(self):
         self.dismiss(None)
+
+    @on(Input.Submitted)
+    def on_enter(self, event: Input.Submitted):
+        self.do_save()
 
     @on(Button.Pressed, "#wiz-save")
     def do_save(self):
@@ -377,6 +400,11 @@ class DashboardReporter(LoopReporter):
         self.screen.phase = "done"
         self.screen.query_one("#activity", RichLog).write(
             f"\n[bold]Done — {num_runs} rounds, {elapsed_min:.0f}m, ${total_cost:.2f}.[/bold]"
+        )
+
+    def on_stderr(self, line):
+        self.screen.query_one("#activity", RichLog).write(
+            f"  [bold red]SDK: {line}[/bold red]"
         )
 
 
@@ -510,15 +538,27 @@ class DashboardScreen(Screen):
 
     @work(exclusive=True)
     async def run_loop(self) -> None:
+        import logging
+        log = logging.getLogger("dashboard.run_loop")
         reporter = DashboardReporter(self)
+        log.info("run_loop started, num_runs=%s", self.cfg.get("num_runs"))
         try:
             await run(self.cfg.get("num_runs", 10), reporter=reporter, config=self.cfg)
+            log.info("run_loop completed normally")
         except asyncio.CancelledError:
-            self.query_one("#activity", RichLog).write("[dim]Stopped.[/dim]")
+            log.info("run_loop cancelled")
+            try:
+                self.query_one("#activity", RichLog).write("[dim]Stopped.[/dim]")
+            except Exception:
+                pass
         except Exception as e:
-            self.query_one("#activity", RichLog).write(
-                f"[bold red]Fatal: {type(e).__name__}: {e}[/bold red]"
-            )
+            log.exception("run_loop error")
+            try:
+                self.query_one("#activity", RichLog).write(
+                    f"[bold red]Fatal: {type(e).__name__}: {e}[/bold red]"
+                )
+            except Exception:
+                pass
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -532,7 +572,12 @@ class AutoresearchApp(App):
         self.num_runs_override = num_runs_override
 
     def on_mount(self) -> None:
+        import logging
+        log = logging.getLogger("dashboard.app")
         cfg = load_config()
+        log.info("Config loaded: %s, pushing: %s",
+                 cfg is not None,
+                 "Dashboard" if self.num_runs_override else ("QuickLaunch" if cfg else "Wizard"))
         if self.num_runs_override:
             if cfg is None:
                 cfg = dict(DEFAULTS)
@@ -557,7 +602,23 @@ class AutoresearchApp(App):
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+LOG_FILE = os.path.join(DIR, "dashboard.log")
+
+
 def main():
+    import logging
+
+    # File logger — flushes every line so `tail -f dashboard.log` works live
+    handler = logging.FileHandler(LOG_FILE, mode="w")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    handler.setLevel(logging.DEBUG)
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    root.addHandler(handler)
+    # Force immediate flush on every log line
+    handler.stream.reconfigure(line_buffering=True)
+    log = logging.getLogger("dashboard")
+
     num_runs = None
     if len(sys.argv) > 1:
         try:
@@ -566,7 +627,15 @@ def main():
                 raise ValueError("must be positive")
         except ValueError as e:
             sys.exit(f"  Error: {e}")
-    AutoresearchApp(num_runs_override=num_runs).run()
+
+    try:
+        AutoresearchApp(num_runs_override=num_runs).run()
+    except Exception:
+        log.exception("Fatal error")
+        raise
+    finally:
+        if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 0:
+            print(f"\n  Log written to {LOG_FILE}", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -56,6 +56,7 @@ class LoopReporter:
     def on_round_done(self, round_cost, total_cost): pass
     def on_round_failed(self, error): pass
     def on_finished(self, num_runs, elapsed_min, total_cost): pass
+    def on_stderr(self, line): pass
 
 
 class CLIReporter(LoopReporter):
@@ -83,6 +84,9 @@ class CLIReporter(LoopReporter):
 
     def on_round_failed(self, error):
         print(f"  --- round failed: {error} ---\n")
+
+    def on_stderr(self, line):
+        print(f"  [SDK] {line}", file=sys.stderr)
 
     def on_finished(self, num_runs, elapsed_min, total_cost):
         print(f"\n  Done — {num_runs} rounds, {elapsed_min:.0f}m, ${total_cost:.2f}.")
@@ -129,12 +133,19 @@ async def run(num_runs, reporter=None, config=None):
     total_cost = 0.0
 
     model = config.get("model", os.environ.get("MODEL", "opus"))
-    effort = config.get("effort", "max")
+    effort = config.get("effort", "high")
     api_key = config.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")
 
     env = {}
     if api_key:
         env["ANTHROPIC_API_KEY"] = api_key
+
+    import logging
+    sdk_log = logging.getLogger("claude_sdk_stderr")
+
+    def _on_stderr(line):
+        sdk_log.warning("SDK: %s", line.rstrip())
+        reporter.on_stderr(line.rstrip())
 
     opts = ClaudeAgentOptions(
         system_prompt=PROMPT,
@@ -144,25 +155,33 @@ async def run(num_runs, reporter=None, config=None):
         model=model,
         effort=effort,
         env=env,
+        stderr=_on_stderr,
     )
-    # Enable 1M context if supported (beta may expire)
-    try:
-        opts.betas = ["context-1m-2025-08-07"]
-    except Exception:
-        pass
+    # Enable 1M context for API users only
+    if api_key:
+        try:
+            opts.betas = ["context-1m-2025-08-07"]
+        except Exception:
+            pass
 
     reporter.on_start(num_runs, model)
+
+    import logging
+    loop_log = logging.getLogger("loop.run")
 
     async with ClaudeSDKClient(options=opts) as client:
         for round_num in range(1, num_runs + 1):
             elapsed = (time.time() - start) / 60
             reporter.on_round_start(round_num, num_runs, elapsed, total_cost)
 
-            msg = MSG_FIRST if round_num == 1 else MSG_NEXT
+            prefix = f"[Round {round_num}/{num_runs}] "
+            msg = prefix + (MSG_FIRST if round_num == 1 else MSG_NEXT)
             try:
                 await client.query(msg)
+                loop_log.info("query sent, waiting for response")
 
                 async for m in client.receive_response():
+                    loop_log.debug("message: %s", type(m).__name__)
                     if isinstance(m, AssistantMessage):
                         for b in m.content:
                             if isinstance(b, TextBlock) and b.text.strip():

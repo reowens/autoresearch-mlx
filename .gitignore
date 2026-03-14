@@ -34,3 +34,6 @@ docs/
 
 # Persisted config
 .autoresearch.json
+
+# Dashboard log
+dashboard.log
