@@ -53,45 +53,45 @@ MSG_NEXT = (
 
 class LoopReporter:
     """Override methods to customize how loop events are displayed."""
-    def on_start(self, num_runs, model): pass
-    def on_round_start(self, round_num, num_runs, elapsed_min, total_cost): pass
-    def on_text(self, text): pass
-    def on_text_delta(self, chunk): pass
-    def on_tool_start(self, name): pass
-    def on_tool_use(self, name, label): pass
-    def on_training_detected(self): pass
-    def on_round_done(self, round_cost, total_cost, usage=None): pass
-    def on_round_failed(self, error): pass
-    def on_finished(self, num_runs, elapsed_min, total_cost, total_usage=None): pass
-    def on_stderr(self, line): pass
+    async def on_start(self, num_runs, model): pass
+    async def on_round_start(self, round_num, num_runs, elapsed_min, total_cost): pass
+    async def on_text(self, text): pass
+    async def on_text_delta(self, chunk): pass
+    async def on_tool_start(self, name): pass
+    async def on_tool_use(self, name, label): pass
+    async def on_training_detected(self): pass
+    async def on_round_done(self, round_cost, total_cost, usage=None): pass
+    async def on_round_failed(self, error): pass
+    async def on_finished(self, num_runs, elapsed_min, total_cost, total_usage=None): pass
+    async def on_stderr(self, line): pass
 
 
 class CLIReporter(LoopReporter):
     """Plain terminal output (default)."""
-    def on_start(self, num_runs, model):
+    async def on_start(self, num_runs, model):
         est = num_runs * MINS_PER_RUN
         print(f"\n  Loop started — {num_runs} runs (~{est} min). Ctrl+C to stop.\n")
 
-    def on_round_start(self, round_num, num_runs, elapsed_min, total_cost):
+    async def on_round_start(self, round_num, num_runs, elapsed_min, total_cost):
         cost_str = f" | ${total_cost:.2f}" if total_cost > 0 else ""
         print(f"  === Round {round_num}/{num_runs} | {elapsed_min:.0f}m elapsed{cost_str} ===\n")
 
-    def on_text(self, text):
+    async def on_text(self, text):
         print(f"  {text[:200]}")
 
-    def on_text_delta(self, chunk):
+    async def on_text_delta(self, chunk):
         print(chunk, end="", flush=True)
 
-    def on_tool_start(self, name):
+    async def on_tool_start(self, name):
         print(f"  [{name}] ", end="", flush=True)
 
-    def on_tool_use(self, name, label):
+    async def on_tool_use(self, name, label):
         print(f"  [{name}] {label}")
 
-    def on_training_detected(self):
+    async def on_training_detected(self):
         print("  > training (~5 min)...")
 
-    def on_round_done(self, round_cost, total_cost, usage=None):
+    async def on_round_done(self, round_cost, total_cost, usage=None):
         cost_note = " (included)" if round_cost == 0 else ""
         tokens = ""
         if usage:
@@ -100,13 +100,13 @@ class CLIReporter(LoopReporter):
             tokens = f" | {(inp + out) // 1000}k tokens"
         print(f"  --- round done (${round_cost:.2f}{cost_note}{tokens} | total ${total_cost:.2f}) ---\n")
 
-    def on_round_failed(self, error):
+    async def on_round_failed(self, error):
         print(f"  --- round failed: {error} ---\n")
 
-    def on_stderr(self, line):
+    async def on_stderr(self, line):
         print(f"  [SDK] {line}", file=sys.stderr)
 
-    def on_finished(self, num_runs, elapsed_min, total_cost, total_usage=None):
+    async def on_finished(self, num_runs, elapsed_min, total_cost, total_usage=None):
         tokens = ""
         if total_usage:
             inp = total_usage.get("input_tokens", 0)
@@ -172,7 +172,8 @@ async def run(num_runs, reporter=None, config=None):
 
     def _on_stderr(line):
         sdk_log.warning("SDK: %s", line.rstrip())
-        reporter.on_stderr(line.rstrip())
+        # Note: can't await here since this is a sync callback
+        # The dashboard reporter's on_stderr just logs, no mount() needed
 
     opts = ClaudeAgentOptions(
         system_prompt=PROMPT,
@@ -191,12 +192,12 @@ async def run(num_runs, reporter=None, config=None):
         except Exception:
             pass
 
-    reporter.on_start(num_runs, model)
+    await reporter.on_start(num_runs, model)
     log.info("Config: model=%s effort=%s time_budget=%dm", model, effort, time_budget_min)
 
     for round_num in range(1, num_runs + 1):
         elapsed = (time.time() - start) / 60
-        reporter.on_round_start(round_num, num_runs, elapsed, total_cost)
+        await reporter.on_round_start(round_num, num_runs, elapsed, total_cost)
 
         prefix = f"[Round {round_num}/{num_runs}] "
         msg = prefix + (MSG_FIRST if round_num == 1 else MSG_NEXT)
@@ -218,7 +219,7 @@ async def run(num_runs, reporter=None, config=None):
                             cb = event.get("content_block", {})
                             if cb.get("type") == "tool_use":
                                 in_tool = True
-                                reporter.on_tool_start(cb.get("name", ""))
+                                await reporter.on_tool_start(cb.get("name", ""))
                             else:
                                 in_tool = False
 
@@ -227,7 +228,7 @@ async def run(num_runs, reporter=None, config=None):
                             if delta.get("type") == "text_delta" and not in_tool:
                                 chunk = delta.get("text", "")
                                 if chunk:
-                                    reporter.on_text_delta(chunk)
+                                    await reporter.on_text_delta(chunk)
 
                         elif etype == "content_block_stop":
                             in_tool = False
@@ -236,7 +237,7 @@ async def run(num_runs, reporter=None, config=None):
                     elif isinstance(m, AssistantMessage):
                         for b in m.content:
                             if isinstance(b, TextBlock) and b.text.strip():
-                                reporter.on_text(b.text.strip())
+                                await reporter.on_text(b.text.strip())
                             elif isinstance(b, ToolUseBlock):
                                 inp = b.input or {}
                                 cmd = inp.get("command", "") if b.name == "Bash" else ""
@@ -244,10 +245,10 @@ async def run(num_runs, reporter=None, config=None):
                                     log.debug("Bash: %s", cmd[:120])
                                 if "uv run" in cmd and "train.py" in cmd and ">" in cmd:
                                     log.info("Training detected")
-                                    reporter.on_training_detected()
+                                    await reporter.on_training_detected()
                                 else:
                                     label = _tool_label(b.name, inp, cmd)
-                                    reporter.on_tool_use(b.name, label)
+                                    await reporter.on_tool_use(b.name, label)
 
                     # ResultMessage — turn complete
                     elif isinstance(m, ResultMessage):
@@ -260,19 +261,19 @@ async def run(num_runs, reporter=None, config=None):
                             log.info("Round %d usage: %s", round_num, usage)
                         if hasattr(m, 'subtype') and m.subtype == "error_max_turns":
                             log.warning("Round %d hit max_turns limit", round_num)
-                            reporter.on_round_failed("hit turn limit (max_turns=15)")
+                            await reporter.on_round_failed("hit turn limit")
                         else:
-                            reporter.on_round_done(cost, total_cost, usage)
+                            await reporter.on_round_done(cost, total_cost, usage)
                         break
 
         except KeyboardInterrupt:
             raise
         except Exception as e:
             log.exception("Round %d failed", round_num)
-            reporter.on_round_failed(f"{type(e).__name__}: {e}")
+            await reporter.on_round_failed(f"{type(e).__name__}: {e}")
 
     elapsed = (time.time() - start) / 60
-    reporter.on_finished(num_runs, elapsed, total_cost, total_usage)
+    await reporter.on_finished(num_runs, elapsed, total_cost, total_usage)
 
 
 # ── CLI entry point ───────────────────────────────────────────────────────────

@@ -1,0 +1,101 @@
+/* autoresearch-mlx dashboard styles */
+
+DashboardScreen {
+    layout: vertical;
+}
+
+#status-line {
+    dock: top;
+    height: 1;
+    background: $primary;
+    color: $text;
+    text-style: bold;
+    padding: 0 1;
+}
+
+ExperimentWindow {
+    height: 1fr;
+    scrollbar-size-vertical: 1;
+}
+
+#contents {
+    height: auto;
+}
+
+/* Round container */
+RoundWidget {
+    height: auto;
+    margin: 1 0 0 0;
+}
+
+.round-header {
+    text-style: bold;
+    height: 1;
+}
+
+/* Tool actions */
+ToolAction {
+    height: auto;
+    margin: 0 0 0 1;
+}
+
+.tool-header {
+    color: $text-muted;
+    height: 1;
+}
+
+/* Training progress */
+TrainingProgress {
+    height: 1;
+    margin: 0 0 0 1;
+}
+
+/* Agent thinking text */
+.thinking-text {
+    color: $text-muted;
+    text-style: italic;
+    height: auto;
+    margin: 0 0 0 1;
+}
+
+/* Result line */
+.result-keep {
+    color: $success;
+    height: 1;
+    margin: 0 0 0 1;
+    text-style: bold;
+}
+
+.result-discard {
+    color: $text-muted;
+    height: 1;
+    margin: 0 0 0 1;
+}
+
+.result-near-miss {
+    color: $warning;
+    height: 1;
+    margin: 0 0 0 1;
+}
+
+/* Session bar */
+#session-bar {
+    dock: bottom;
+    height: 1;
+    background: $surface;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+/* Results table */
+#results {
+    dock: bottom;
+    height: auto;
+    max-height: 8;
+}
+
+DataTable > .datatable--odd-row {
+    background: $surface;
+}
+
+/* QuickLaunch and Wizard screens keep their inline CSS */
