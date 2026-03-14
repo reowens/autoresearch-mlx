@@ -382,6 +382,9 @@ class DashboardReporter(LoopReporter):
             self._text_buf = ""
 
     def _log(self, markup):
+        # Convert markdown to Rich markup
+        markup = re.sub(r'\*\*(.+?)\*\*', r'[bold]\1[/bold]', markup)
+        markup = re.sub(r'`(.+?)`', r'[cyan]\1[/cyan]', markup)
         self.screen.query_one("#activity", RichLog).write(markup)
 
     def on_start(self, num_runs, model):
@@ -407,12 +410,18 @@ class DashboardReporter(LoopReporter):
         """Full text from AssistantMessage. Show if streaming didn't catch it."""
         self._touch()
         self._flush_reads()
-        # Only show if we didn't stream it already
         if not self._text_buf:
-            for line in text.strip().split("\n")[:3]:
+            for line in text.strip().split("\n"):
                 line = line.strip()
-                if line:
-                    self._log(f"  [dim italic]{line[:120]}[/dim italic]")
+                if not line:
+                    continue
+                # Highlight result lines and summaries
+                if line.startswith("- "):
+                    self._log(f"  {line[:140]}")
+                elif "val_bpb" in line or "improved" in line.lower() or "discard" in line.lower():
+                    self._log(f"  [bold]{line[:140]}[/bold]")
+                else:
+                    self._log(f"  [dim]{line[:140]}[/dim]")
 
     def on_text_delta(self, chunk):
         self._touch()
@@ -421,8 +430,14 @@ class DashboardReporter(LoopReporter):
         while "\n" in self._text_buf:
             line, self._text_buf = self._text_buf.split("\n", 1)
             line = line.strip()
-            if line:
-                self._log(f"  [dim italic]{line[:120]}[/dim italic]")
+            if not line:
+                continue
+            if line.startswith("- "):
+                self._log(f"  {line[:140]}")
+            elif "val_bpb" in line or "improved" in line.lower() or "discard" in line.lower():
+                self._log(f"  [bold]{line[:140]}[/bold]")
+            else:
+                self._log(f"  [dim]{line[:140]}[/dim]")
 
     def on_tool_start(self, name):
         self._touch()
