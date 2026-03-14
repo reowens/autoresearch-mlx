@@ -134,6 +134,7 @@ class GPT(nn.Module):
         self.window_sizes = self._compute_window_sizes(config)
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.blocks = [Block(config, i) for i in range(config.n_layer)]
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.resid_lambdas = mx.ones((config.n_layer,), dtype=mx.float32)
         self.x0_lambdas = mx.zeros((config.n_layer,), dtype=mx.float32)
         head_dim = config.n_embd // config.n_head
@@ -150,6 +151,7 @@ class GPT(nn.Module):
         scale = 3**0.5 * n_embd**-0.5
 
         self.wte.weight = (mx.random.normal(self.wte.weight.shape) * 1.0).astype(mx.bfloat16)
+        self.lm_head.weight = (mx.random.normal(self.lm_head.weight.shape) * 0.001).astype(mx.bfloat16)
 
         for block in self.blocks:
             block.attn.c_q.weight = mx.random.uniform(-scale, scale, block.attn.c_q.weight.shape).astype(mx.bfloat16)
@@ -204,7 +206,7 @@ class GPT(nn.Module):
             x = block(x, ve, masks[i])
         x = norm(x)
 
-        logits = (x @ self.wte.weight.T).astype(mx.float32)
+        logits = self.lm_head(x).astype(mx.float32)
         logits = 15.0 * mx.tanh(logits / 15.0)
 
         if targets is None:
@@ -266,6 +268,8 @@ class MuonAdamW:
                 # Everything else → AdamW
                 if "wte" in path or "value_embeds" in path:
                     lr, wd, betas = embedding_lr * dmodel_lr_scale, 0.0, adam_betas
+                elif "lm_head" in path:
+                    lr, wd, betas = unembedding_lr * dmodel_lr_scale, 0.0, adam_betas
                 elif "resid_lambdas" in path:
                     lr, wd, betas = scalar_lr * 0.01, 0.0, adam_betas
                 elif "x0_lambdas" in path:
@@ -443,7 +447,7 @@ EMBEDDING_LR = 0.6
 UNEMBEDDING_LR = 0.004
 MATRIX_LR = 0.04
 SCALAR_LR = 0.5
-WEIGHT_DECAY = 0.1
+WEIGHT_DECAY = 0.2
 ADAM_BETAS = (0.8, 0.95)
 WARMUP_RATIO = 0.05
 WARMDOWN_RATIO = 0.3

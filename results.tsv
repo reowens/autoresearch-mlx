@@ -17,4 +17,5 @@ b76dc62	1.381566	21.2	discard	cosine warmdown schedule (replace linear decay)
 02bfdef	1.401088	22.5	discard	increase model width to 320 (ASPECT_RATIO=80)
 c47f355	1.373827	22.2	discard	increase MLP expansion from 4x to 6x
 71d6dc4	3.290099	21.1	discard	weight tying (share wte and lm_head weights)
-c66422b	3.295559	21.1	discard	reduce Muon ns_steps from 5 to 3
+c66422b	3.295559	21.1	discard	reduce Muon ns_steps from 5 to 3 (TAINTED: weight tying not reverted)
+73382a2	3.312070	21.1	discard	halve weight decay 0.2->0.1 (TAINTED: weight tying not reverted)
