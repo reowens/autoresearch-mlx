@@ -442,7 +442,7 @@ class DashboardReporter(LoopReporter):
         await self._flush_reads()
         if not self._text_buf and self._current_round:
             text = self._clean_markdown(text)
-            for line in text.strip().split("\n")[:3]:
+            for line in text.strip().split("\n"):
                 line = line.strip()
                 if line:
                     css = self._classify_line(line)
@@ -474,11 +474,9 @@ class DashboardReporter(LoopReporter):
             return
         await self._flush_reads()
         await self._flush_text()
-        # Only end training phase on Bash commands (actual experiment actions)
-        # SDK-internal tools (ToolSearch, TaskOutput) can fire during training
-        if self._training_widget and self.screen.phase == "training" and name == "Bash":
-            self.screen.phase = "experimenting"
-            self._training_widget.stop()
+        # Don't reset training phase here — on_round_done handles it.
+        # The agent can run Bash commands during training (tail run.log,
+        # git amend) that don't mean training ended.
         if not self._current_round:
             return
         if name == "Bash" and "experiment:" in str(label):
