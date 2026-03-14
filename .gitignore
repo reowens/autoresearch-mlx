@@ -31,3 +31,6 @@ progress.png
 # Internal docs
 docs/
 .osgrep
+
+# Persisted config
+.autoresearch.json
