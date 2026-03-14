@@ -183,7 +183,7 @@ class GPT(nn.Module):
 
     def init_weights(self):
         n_embd = self.config.n_embd
-        scale = 3**0.5 * n_embd**-0.5
+        scale = 3**0.5 * n_embd**-0.5 * 0.68
 
         self.wte.weight = (mx.random.normal(self.wte.weight.shape) * 1.0).astype(mx.bfloat16)
         self.lm_head.weight = (mx.random.normal(self.lm_head.weight.shape) * 0.001).astype(mx.bfloat16)
@@ -488,6 +488,10 @@ DEVICE_BATCH_SIZE = 8
 FINAL_EVAL_BATCH_SIZE = 256
 STARTUP_EXCLUDE_STEPS = 10
 
+# Early structural triage
+TRIAGE_TIME = 60        # seconds into training; 0 to disable
+TRIAGE_KILL = 0.5       # kill if effective rank drops below this fraction of initial
+
 
 def get_lr_multiplier(progress):
     if progress < WARMUP_RATIO:
@@ -507,6 +511,21 @@ def get_muon_momentum(step):
 def get_weight_decay(progress):
     """Weight decay decays to 0 over training."""
     return WEIGHT_DECAY * (1 - progress)
+
+
+def structural_triage(model):
+    """Effective rank (spectral entropy) of weight matrices. Higher = healthier."""
+    ranks = []
+    for _, p in tree_flatten(model.parameters()):
+        if p.ndim != 2 or min(p.shape) < 64:
+            continue
+        _, s, _ = mx.linalg.svd(p.astype(mx.float32), stream=mx.cpu)
+        s = s / mx.sum(s)
+        # Mask near-zero singular values to avoid log(0)
+        safe_s = mx.where(s > 1e-8, s, mx.ones_like(s))
+        entropy = -mx.sum(mx.where(s > 1e-8, s * mx.log(safe_s), mx.zeros_like(s)))
+        ranks.append(mx.exp(entropy).item())
+    return sum(ranks) / len(ranks) if ranks else 0.0
 
 
 t_start = time.time()
@@ -535,6 +554,11 @@ model.init_weights()
 mx.eval(model.parameters())
 num_params = sum(param.size for _, param in tree_flatten(model.parameters()))
 
+# Structural triage baseline
+initial_rank = structural_triage(model)
+triage_done = TRIAGE_TIME <= 0
+print(f"Initial effective rank: {initial_rank:.1f}")
+
 # Hardware detection for MFU
 chip_name, gpu_cores = get_apple_silicon_info()
 peak_flops = estimate_peak_flops(chip_name, gpu_cores)
@@ -543,6 +567,7 @@ print(f"Hardware: {chip_name} ({gpu_cores} GPU cores, {peak_flops/1e12:.1f} TFLO
 tokens_per_fwdbwd = DEVICE_BATCH_SIZE * MAX_SEQ_LEN
 assert TOTAL_BATCH_SIZE % tokens_per_fwdbwd == 0
 grad_accum_steps = TOTAL_BATCH_SIZE // tokens_per_fwdbwd
+assert grad_accum_steps > 0, "TOTAL_BATCH_SIZE must be >= DEVICE_BATCH_SIZE * MAX_SEQ_LEN"
 
 optimizer = MuonAdamW(
     model,
@@ -609,6 +634,16 @@ while True:
         raise SystemExit(1)
 
     dt = time.time() - t0
+
+    # Structural triage: kill if effective rank has collapsed
+    if not triage_done and total_training_time >= TRIAGE_TIME:
+        triage_done = True
+        eff_rank = structural_triage(model)
+        rank_ratio = eff_rank / initial_rank if initial_rank > 0 else 0
+        print(f"\n[triage@{total_training_time:.0f}s] rank={eff_rank:.1f} ({rank_ratio:.0%} of init)")
+        if rank_ratio < TRIAGE_KILL:
+            print(f"[triage] KILL: effective rank collapsed to {rank_ratio:.0%} of initial")
+            raise SystemExit(1)
     if step >= STARTUP_EXCLUDE_STEPS:
         total_training_time += dt
 
@@ -643,6 +678,10 @@ t_train = time.time()
 print(f"Training completed in {t_train - t_compiled:.1f}s")
 
 total_tokens = step * TOTAL_BATCH_SIZE
+
+# Save checkpoint before eval so training isn't lost if eval OOMs
+mx.savez("checkpoint.npz", **dict(tree_flatten(model.parameters())))
+
 print("Starting final eval...")
 print(f"Final eval batch size: {FINAL_EVAL_BATCH_SIZE}")
 val_bpb = evaluate_bpb(model, tokenizer, FINAL_EVAL_BATCH_SIZE)
@@ -669,3 +708,8 @@ print(f"total_tokens_M:   {total_tokens / 1e6:.1f}")
 print(f"num_steps:        {step}")
 print(f"num_params_M:     {num_params / 1e6:.1f}")
 print(f"depth:            {DEPTH}")
+final_rank = structural_triage(model)
+rank_retention = final_rank / initial_rank if initial_rank > 0 else 0
+print(f"eff_rank_init:    {initial_rank:.1f}")
+print(f"eff_rank_final:   {final_rank:.1f}")
+print(f"rank_retention:   {rank_retention:.4f}")
