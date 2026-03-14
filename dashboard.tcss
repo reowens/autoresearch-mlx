@@ -26,7 +26,7 @@ ExperimentWindow {
 RoundWidget {
     height: auto;
     margin: 1 0 0 0;
-    border-left: tall $primary 30%;
+    border-left: tall $primary;
     padding: 0 0 0 1;
 }
 
@@ -35,7 +35,7 @@ RoundWidget.-keep {
 }
 
 RoundWidget.-discard {
-    border-left: tall $text-muted 20%;
+    border-left: tall $panel;
 }
 
 .round-header {
