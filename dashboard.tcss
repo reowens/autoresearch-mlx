@@ -22,10 +22,20 @@ ExperimentWindow {
     height: auto;
 }
 
-/* Round container */
+/* Round container — left border accent */
 RoundWidget {
     height: auto;
     margin: 1 0 0 0;
+    border-left: tall $primary 30%;
+    padding: 0 0 0 1;
+}
+
+RoundWidget.-keep {
+    border-left: tall $success;
+}
+
+RoundWidget.-discard {
+    border-left: tall $text-muted 20%;
 }
 
 .round-header {
@@ -47,13 +57,26 @@ ToolAction {
     color: $text-muted;
 }
 
+/* Collapsible read: summary visible, detail hidden */
+ToolAction #tool-detail {
+    display: none;
+}
+
+ToolAction.-expanded #tool-summary {
+    display: none;
+}
+
+ToolAction.-expanded #tool-detail {
+    display: block;
+}
+
 /* Training progress */
 TrainingProgress {
     height: 1;
     margin: 0 0 0 1;
 }
 
-/* Agent thinking text */
+/* Agent thinking — classified by content */
 .thinking-text {
     color: $text-muted;
     text-style: italic;
@@ -61,7 +84,18 @@ TrainingProgress {
     margin: 0 0 0 1;
 }
 
-/* Result line */
+.thinking-result {
+    height: auto;
+    margin: 0 0 0 1;
+    text-style: bold;
+}
+
+.thinking-bullet {
+    height: auto;
+    margin: 0 0 0 1;
+}
+
+/* Result lines */
 .result-keep {
     color: $success;
     height: 1;
@@ -100,5 +134,3 @@ TrainingProgress {
 DataTable > .datatable--odd-row {
     background: $surface;
 }
-
-/* QuickLaunch and Wizard screens keep their inline CSS */

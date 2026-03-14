@@ -381,16 +381,24 @@ class DashboardReporter(LoopReporter):
             await self._current_round.mount(ToolAction("Read", files))
             self._read_buffer = []
 
+    def _classify_line(self, line):
+        """Return CSS class for a line of agent text."""
+        low = line.lower()
+        if any(kw in low for kw in ["val_bpb", "improved", "keep", "discard", "result", "better", "worse"]):
+            return "thinking-result"
+        if line.startswith("- "):
+            return "thinking-bullet"
+        return "thinking-text"
+
     async def _flush_text(self):
         if self._text_buf.strip() and self._current_round:
-            text = self._text_buf.strip()
-            text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-            text = re.sub(r'`(.+?)`', r'\1', text)
+            text = self._clean_markdown(self._text_buf.strip())
             for line in text.split("\n")[:3]:
                 line = line.strip()
                 if line:
+                    css = self._classify_line(line)
                     await self._current_round.mount(
-                        Static(line[:120], classes="thinking-text")
+                        Static(line[:120], classes=css)
                     )
             self._text_buf = ""
 
@@ -424,8 +432,9 @@ class DashboardReporter(LoopReporter):
             for line in text.strip().split("\n")[:3]:
                 line = line.strip()
                 if line:
+                    css = self._classify_line(line)
                     await self._current_round.mount(
-                        Static(line[:120], classes="thinking-text")
+                        Static(line[:120], classes=css)
                     )
 
     async def on_text_delta(self, chunk):
@@ -435,8 +444,9 @@ class DashboardReporter(LoopReporter):
             line, self._text_buf = self._text_buf.split("\n", 1)
             line = self._clean_markdown(line.strip())
             if line and self._current_round:
+                css = self._classify_line(line)
                 await self._current_round.mount(
-                    Static(line[:120], classes="thinking-text")
+                    Static(line[:120], classes=css)
                 )
 
     async def on_tool_start(self, name):
@@ -503,6 +513,7 @@ class DashboardReporter(LoopReporter):
                 await self._current_round.mount(
                     Static(f"{icon} {bpb:.4f} ({delta_str} vs best)", classes=css)
                 )
+                self._current_round.set_result(bpb, status, delta_str)
                 self._round_summaries.append(f"R{self.screen.round_num}: {icon} {bpb:.4f}")
         except Exception:
             pass
@@ -572,7 +583,7 @@ class DashboardScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Static(id="status-line")
         yield ExperimentWindow()
-        yield Static(id="session-bar")
+        yield Static(id="session-bar", markup=True)
         yield DataTable(id="results", zebra_stripes=True)
         yield Footer()
 
@@ -618,9 +629,9 @@ class DashboardScreen(Screen):
         if self.num_runs:
             bw = 15
             filled = int(bw * self.round_num / self.num_runs)
-            bar = "█" * filled + "░" * (bw - filled)
+            bar = f"[green]{'█' * filled}[/][dim]{'░' * (bw - filled)}[/]"
         else:
-            bar = "░" * 15
+            bar = f"[dim]{'░' * 15}[/]"
         self.query_one("#session-bar", Static).update(f" {bar} {r} · {cost}{tokens}")
 
     def watch_round_num(self) -> None:
@@ -640,7 +651,7 @@ class DashboardScreen(Screen):
                 lines = [l.strip() for l in f if l.strip()]
             if len(lines) < 2:
                 return
-            table.add_columns("", "val_bpb", "mem", "description")
+            table.add_columns("", "val_bpb", "delta", "description")
             data_lines = [l for l in lines[1:] if len(l.split("\t")) >= 5]
             rows = [l.split("\t") for l in data_lines]
             kept = [r for r in rows if r[3] == "keep"]
@@ -657,23 +668,34 @@ class DashboardScreen(Screen):
                 if id(r) not in shown:
                     sorted_rows.append(r)
                     shown.add(id(r))
-            for cols in sorted_rows:
+            max_rows = 8
+            for i, cols in enumerate(sorted_rows):
+                if i >= max_rows:
+                    remaining = len(sorted_rows) - max_rows
+                    table.add_row("", "", "", f"... and {remaining} more")
+                    break
                 status, bpb = cols[3], cols[1]
                 is_best = best_bpb and status == "keep" and float(bpb) == best_bpb
                 delta = float(bpb) - best_bpb if best_bpb else 999
                 if is_best:
                     icon = "[bold green]★[/]"
+                    delta_str = "best"
                 elif status == "keep":
                     icon = "[green]✓[/]"
+                    delta_str = f"+{delta:.4f}" if delta > 0 else "baseline"
                 elif status == "crash" or float(bpb) == 0:
                     icon = "[red]![/]"
+                    delta_str = "crash"
                 elif delta > 1.0:
                     icon = "[red]![/]"
+                    delta_str = f"+{delta:.3f}"
                 elif delta < 0.02:
                     icon = "[yellow]~[/]"
+                    delta_str = f"+{delta:.4f}"
                 else:
                     icon = "[dim]✗[/]"
-                table.add_row(icon, bpb, cols[2], cols[4])
+                    delta_str = f"+{delta:.4f}"
+                table.add_row(icon, bpb, delta_str, cols[4])
         except Exception:
             pass
 
