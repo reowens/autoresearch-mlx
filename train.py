@@ -41,13 +41,13 @@ def has_ve(layer_idx, n_layer):
     return layer_idx % 2 == (n_layer - 1) % 2
 
 
-def create_additive_causal_mask(seq_len, dtype=mx.float32):
+def create_additive_causal_mask(seq_len, dtype=mx.bfloat16):
     indices = mx.arange(seq_len)
     blocked = indices[None, :] > indices[:, None]
     return mx.where(blocked, mx.array(float("-inf"), dtype=dtype), mx.array(0.0, dtype=dtype))
 
 
-def create_sliding_window_mask(seq_len, window_size, dtype=mx.float32):
+def create_sliding_window_mask(seq_len, window_size, dtype=mx.bfloat16):
     indices = mx.arange(seq_len)
     causal = indices[None, :] > indices[:, None]
     too_far = (indices[:, None] - indices[None, :]) >= window_size
@@ -172,8 +172,6 @@ class GPT(nn.Module):
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.blocks = [Block(config, i) for i in range(config.n_layer)]
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        self.resid_lambdas = mx.ones((config.n_layer,), dtype=mx.float32)
-        self.x0_lambdas = mx.zeros((config.n_layer,), dtype=mx.float32)
         head_dim = config.n_embd // config.n_head
         kv_dim = config.n_kv_head * head_dim
         self.value_embeds = {
@@ -199,9 +197,6 @@ class GPT(nn.Module):
             block.mlp.c_proj.weight = mx.zeros_like(block.mlp.c_proj.weight).astype(mx.bfloat16)
             if block.attn.ve_gate is not None:
                 block.attn.ve_gate.weight = mx.zeros_like(block.attn.ve_gate.weight).astype(mx.bfloat16)
-
-        self.resid_lambdas = mx.ones((self.config.n_layer,), dtype=mx.float32)
-        self.x0_lambdas = mx.full((self.config.n_layer,), 0.1, dtype=mx.float32)
 
         for ve in self.value_embeds.values():
             ve.weight = mx.random.uniform(-scale, scale, ve.weight.shape).astype(mx.bfloat16)
@@ -236,9 +231,7 @@ class GPT(nn.Module):
 
         x = self.wte(idx)
         x = norm(x)
-        x0 = x
         for i, block in enumerate(self.blocks):
-            x = self.resid_lambdas[i] * x + self.x0_lambdas[i] * x0
             ve = self.value_embeds[str(i)](idx) if str(i) in self.value_embeds else None
             x = block(x, ve, masks[i])
         x = norm(x)
@@ -277,7 +270,7 @@ polar_express_coeffs = [
 class MuonAdamW:
     """Combined optimizer: Muon for 2D matrix params in blocks, AdamW for others."""
 
-    def __init__(self, model, unembedding_lr, embedding_lr, matrix_lr, weight_decay, adam_betas, scalar_lr):
+    def __init__(self, model, unembedding_lr, embedding_lr, matrix_lr, weight_decay, adam_betas):
         model_dim = model.config.n_embd
         dmodel_lr_scale = (model_dim / 768) ** -0.5
 
@@ -307,10 +300,6 @@ class MuonAdamW:
                     lr, wd, betas = embedding_lr * dmodel_lr_scale, 0.0, adam_betas
                 elif "lm_head" in path:
                     lr, wd, betas = unembedding_lr * dmodel_lr_scale, 0.0, adam_betas
-                elif "resid_lambdas" in path:
-                    lr, wd, betas = scalar_lr * 0.01, 0.0, adam_betas
-                elif "x0_lambdas" in path:
-                    lr, wd, betas = scalar_lr, 0.0, (0.96, 0.95)
                 else:
                     lr, wd, betas = unembedding_lr * dmodel_lr_scale, 0.0, adam_betas
 
@@ -486,7 +475,7 @@ TOTAL_BATCH_SIZE = 2**14
 EMBEDDING_LR = 0.6
 UNEMBEDDING_LR = 0.004
 MATRIX_LR = 0.04
-SCALAR_LR = 0.5
+
 WEIGHT_DECAY = 0.2
 ADAM_BETAS = (0.8, 0.95)
 WARMUP_RATIO = 0.0
@@ -562,7 +551,7 @@ optimizer = MuonAdamW(
     matrix_lr=MATRIX_LR,
     weight_decay=WEIGHT_DECAY,
     adam_betas=ADAM_BETAS,
-    scalar_lr=SCALAR_LR,
+
 )
 
 loss_grad_fn = nn.value_and_grad(model, lambda model, inputs, targets: model(inputs, targets=targets))
