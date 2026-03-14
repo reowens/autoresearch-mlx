@@ -257,7 +257,7 @@ class MuonAdamW:
                         "paths": [],
                         "lr": matrix_lr,
                         "momentum": 0.95,
-                        "ns_steps": 3,
+                        "ns_steps": 5,
                         "beta2": 0.95,
                         "weight_decay": weight_decay,
                     }
