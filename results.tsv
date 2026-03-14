@@ -36,3 +36,4 @@ bf39c34	1.392430	21.2	discard	depth 5 with model_dim 256 (ASPECT_RATIO=51; slowe
 7075d0d	1.301109	21.2	discard	depth 8 with model_dim 256 (ASPECT_RATIO=32; slower steps hurt throughput)
 e92cb59	1.330026	21.2	discard	depth 7 with model_dim 256 (ASPECT_RATIO=36; still slower than depth 6)
 7f13638	1.345895	21.1	discard	MQA with n_kv_head=1 (too aggressive; quality loss outweighs speed gain)
+c5fb70a	1.311165	21.2	discard	reduce weight decay 0.2 -> 0.1 (with depth 6 + GQA)
