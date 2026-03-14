@@ -437,7 +437,7 @@ class MuonAdamW:
 # ---------------------------------------------------------------------------
 
 # Model architecture
-ASPECT_RATIO = 42
+ASPECT_RATIO = 64
 HEAD_DIM = 64
 WINDOW_PATTERN = "SSSL"
 
@@ -445,7 +445,7 @@ WINDOW_PATTERN = "SSSL"
 TOTAL_BATCH_SIZE = 2**14
 EMBEDDING_LR = 0.6
 UNEMBEDDING_LR = 0.004
-MATRIX_LR = 0.04
+MATRIX_LR = 0.05
 SCALAR_LR = 0.5
 WEIGHT_DECAY = 0.2
 ADAM_BETAS = (0.8, 0.95)
@@ -454,7 +454,7 @@ WARMDOWN_RATIO = 0.3
 FINAL_LR_FRAC = 0.0
 
 # Model size
-DEPTH = 6
+DEPTH = 4
 DEVICE_BATCH_SIZE = 8
 FINAL_EVAL_BATCH_SIZE = 256
 STARTUP_EXCLUDE_STEPS = 10
