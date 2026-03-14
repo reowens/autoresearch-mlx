@@ -191,7 +191,7 @@ async def run(num_runs, reporter=None, config=None):
                                 cmd = inp.get("command", "") if b.name == "Bash" else ""
                                 if b.name == "Bash" and cmd:
                                     loop_log.debug("Bash cmd: %s", cmd[:120])
-                                if "train.py" in cmd and ">" in cmd:
+                                if "uv run" in cmd and "train.py" in cmd and ">" in cmd:
                                     loop_log.info("Training detected: %s", cmd[:120])
                                     reporter.on_training_detected()
                                 else:
