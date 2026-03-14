@@ -21,3 +21,4 @@ c66422b	3.295559	21.1	discard	reduce Muon ns_steps from 5 to 3 (TAINTED: weight 
 73382a2	3.312070	21.1	discard	halve weight decay 0.2->0.1 (TAINTED: weight tying not reverted)
 42caa55	1.364382	21.2	discard	halve weight decay 0.2->0.1 (clean retest)
 2d90f5f	1.372535	21.2	discard	increase embedding LR from 0.6 to 1.0
+5f5d4de	1.362484	21.2	discard	all full-attention layers (WINDOW_PATTERN=L instead of SSSL)
