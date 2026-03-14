@@ -156,6 +156,7 @@ async def run(num_runs, reporter=None, config=None):
         effort=effort,
         env=env,
         stderr=_on_stderr,
+        include_partial_messages=True,
     )
     # Enable 1M context for API users only
     if api_key:
