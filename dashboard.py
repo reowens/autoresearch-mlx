@@ -479,7 +479,7 @@ class DashboardReporter(LoopReporter):
         self.screen.query_one("#train-row").display = True
         self.screen.query_one("#train-bar", ProgressBar).update(total=100, progress=0)
         self.screen.query_one("#train-stats", Static).update(" starting...")
-        self._log("  [bold green]▶ training[/bold green]")
+        self._log("  [bold green]▶ Training[/bold green]")
 
     def on_round_done(self, round_cost, total_cost):
         self._touch()
@@ -618,7 +618,7 @@ class DashboardScreen(Screen):
             dots = "·" * self._thinking_dots + " " * (3 - self._thinking_dots)
             suffix = f"  thinking {dots} ({int(thinking_secs)}s)"
         elif self.phase == "training":
-            suffix = "  ▶ training"
+            suffix = "  ▶ Training"
         elif self.phase == "done":
             suffix = "  ✓ done"
         elif self.phase == "error":
