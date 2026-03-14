@@ -207,7 +207,7 @@ class GPT(nn.Module):
         x = norm(x)
 
         logits = self.lm_head(x).astype(mx.float32)
-        logits = 30.0 * mx.tanh(logits / 30.0)
+        logits = 15.0 * mx.tanh(logits / 15.0)
 
         if targets is None:
             return logits
