@@ -32,7 +32,9 @@ if not os.path.exists(_prompt_path):
 with open(_prompt_path) as f:
     PROMPT = f.read()
 
-MINS_PER_RUN = 7  # ~5 min training + ~2 min overhead
+DEFAULT_TIME_BUDGET = 5  # minutes
+OVERHEAD_MIN = 2  # ~2 min overhead per run (compile, eval, git)
+MINS_PER_RUN = DEFAULT_TIME_BUDGET + OVERHEAD_MIN
 
 MSG_FIRST = (
     "Read results.tsv, train.py, and prepare.py. Run exactly ONE experiment: "
@@ -147,7 +149,11 @@ async def run(num_runs, reporter=None, config=None):
     effort = config.get("effort", "medium")
     api_key = config.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")
 
-    env = {}
+    time_budget_min = config.get("time_budget", DEFAULT_TIME_BUDGET)
+    time_budget_sec = time_budget_min * 60
+    mins_per_run = time_budget_min + OVERHEAD_MIN
+
+    env = {"TIME_BUDGET": str(time_budget_sec)}
     if api_key:
         env["ANTHROPIC_API_KEY"] = api_key
 
@@ -177,6 +183,7 @@ async def run(num_runs, reporter=None, config=None):
             pass
 
     reporter.on_start(num_runs, model)
+    log.info("Config: model=%s effort=%s time_budget=%dm", model, effort, time_budget_min)
 
     for round_num in range(1, num_runs + 1):
         elapsed = (time.time() - start) / 60

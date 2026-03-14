@@ -52,6 +52,7 @@ DEFAULTS = {
     "model": "opus",
     "effort": "medium",
     "num_runs": 10,
+    "time_budget": 5,  # minutes per training run
     "branch": "",
     "api_key": "",
 }
@@ -130,8 +131,9 @@ def data_ok():
     )
 
 
-def est_str(n):
-    est = n * MINS_PER_RUN
+def est_str(n, time_budget=5):
+    mins_per = time_budget + 2  # training + overhead
+    est = n * mins_per
     return f"~{est / 60:.1f}h" if est >= 60 else f"~{est}m"
 
 
@@ -159,6 +161,7 @@ class QuickLaunchScreen(Screen):
     #ql-title { text-style: bold; text-align: center; }
     #ql-config { color: $text-muted; }
     #ql-runs-input { width: 8; }
+    #ql-time-input { width: 8; }
     #ql-buttons { height: auto; align: center middle; margin-top: 1; }
     #ql-buttons Button { margin: 0 1; min-width: 12; }
     """
@@ -171,6 +174,7 @@ class QuickLaunchScreen(Screen):
         branch = get_branch()
         results = get_results_summary()
         num = int(self.cfg.get("num_runs", 10))
+        tb = int(self.cfg.get("time_budget", 5))
         effort = self.cfg.get("effort", "medium")
 
         info = branch
@@ -201,8 +205,10 @@ class QuickLaunchScreen(Screen):
                 f"{self.cfg.get('model', 'opus')}/{effort}",
                 id="ql-config",
             )
-            yield Label(f"Runs ({est_str(num)}):")
+            yield Label(f"Runs ({est_str(num, tb)}):", id="ql-runs-label")
             yield Input(str(num), id="ql-runs-input", type="integer")
+            yield Label(f"Training time: {tb} min/run", id="ql-time-label")
+            yield Input(str(tb), id="ql-time-input", type="integer")
             yield Horizontal(
                 Button("Start", variant="primary", id="ql-start"),
                 Button("Settings", id="ql-settings"),
@@ -212,15 +218,24 @@ class QuickLaunchScreen(Screen):
     def on_mount(self) -> None:
         self.query_one("#ql-runs-input", Input).focus()
 
-    @on(Input.Changed, "#ql-runs-input")
-    def update_label(self, event: Input.Changed):
+    def _update_estimates(self):
         try:
-            n = int(event.value)
-            self.query_one("Label").update(f"Runs ({est_str(n)}):")
-        except ValueError:
+            n = int(self.query_one("#ql-runs-input", Input).value)
+            tb = int(self.query_one("#ql-time-input", Input).value)
+            self.query_one("#ql-runs-label", Label).update(f"Runs ({est_str(n, tb)}):")
+            self.query_one("#ql-time-label", Label).update(f"Training time: {tb} min/run")
+        except (ValueError, Exception):
             pass
 
-    @on(Input.Submitted, "#ql-runs-input")
+    @on(Input.Changed, "#ql-runs-input")
+    def on_runs_changed(self, event: Input.Changed):
+        self._update_estimates()
+
+    @on(Input.Changed, "#ql-time-input")
+    def on_time_changed(self, event: Input.Changed):
+        self._update_estimates()
+
+    @on(Input.Submitted)
     def on_enter(self, event: Input.Submitted):
         self.do_start()
 
@@ -228,6 +243,10 @@ class QuickLaunchScreen(Screen):
     def do_start(self):
         try:
             self.cfg["num_runs"] = int(self.query_one("#ql-runs-input", Input).value)
+        except ValueError:
+            pass
+        try:
+            self.cfg["time_budget"] = int(self.query_one("#ql-time-input", Input).value)
         except ValueError:
             pass
         self.cfg["branch"] = get_branch()
@@ -262,6 +281,7 @@ class WizardScreen(Screen):
     #wiz-new-tag { width: 30; display: none; }
     #wiz-model { width: 100%; }
     #wiz-effort { width: 100%; }
+    #wiz-time { width: 100%; }
     #wiz-apikey { width: 100%; }
     #wiz-buttons { height: auto; align: center middle; margin-top: 1; }
     #wiz-buttons Button { margin: 0 1; min-width: 10; }
@@ -300,6 +320,10 @@ class WizardScreen(Screen):
 
             yield Label("Effort:")
             yield Select(efforts, value=self.cfg.get("effort", "medium"), id="wiz-effort")
+
+            times = [("5 min", 5), ("10 min", 10), ("15 min", 15), ("20 min", 20)]
+            yield Label("Training time per run:")
+            yield Select(times, value=self.cfg.get("time_budget", 5), id="wiz-time")
 
             api_key = os.environ.get("ANTHROPIC_API_KEY", "")
             yield Label("API Key (blank = subscription):")
@@ -344,11 +368,13 @@ class WizardScreen(Screen):
 
         model_val = self.query_one("#wiz-model", Select).value
         effort_val = self.query_one("#wiz-effort", Select).value
+        time_val = self.query_one("#wiz-time", Select).value
 
         cfg = {
             "model": str(model_val) if model_val else "opus",
             "effort": str(effort_val) if effort_val else "medium",
             "num_runs": self.cfg.get("num_runs", 10),
+            "time_budget": int(time_val) if time_val else 5,
             "branch": branch,
             "api_key": self.query_one("#wiz-apikey", Input).value.strip(),
         }

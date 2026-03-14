@@ -16,6 +16,7 @@ import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_map
 
 from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, evaluate_bpb, make_dataloader
+TIME_BUDGET = int(os.environ.get("TIME_BUDGET", TIME_BUDGET))
 
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
