@@ -20,6 +20,7 @@ from claude_agent_sdk import (
     TextBlock,
     ToolUseBlock,
 )
+from claude_agent_sdk.types import StreamEvent
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -51,6 +52,8 @@ class LoopReporter:
     def on_start(self, num_runs, model): pass
     def on_round_start(self, round_num, num_runs, elapsed_min, total_cost): pass
     def on_text(self, text): pass
+    def on_text_delta(self, chunk): pass  # streaming text chunk
+    def on_tool_start(self, name): pass   # tool call beginning
     def on_tool_use(self, name, label): pass
     def on_training_detected(self): pass
     def on_round_done(self, round_cost, total_cost): pass
@@ -74,6 +77,12 @@ class CLIReporter(LoopReporter):
 
     def on_tool_use(self, name, label):
         print(f"  [{name}] {label}")
+
+    def on_text_delta(self, chunk):
+        print(chunk, end="", flush=True)
+
+    def on_tool_start(self, name):
+        print(f"  [{name}] ", end="", flush=True)
 
     def on_training_detected(self):
         print("  > training (~5 min)...")
@@ -181,9 +190,35 @@ async def run(num_runs, reporter=None, config=None):
                 await client.query(msg)
                 loop_log.info("query sent, waiting for response")
 
+                in_tool = False
+                current_tool_name = None
+
                 async for m in client.receive_response():
-                    loop_log.debug("message: %s", type(m).__name__)
-                    if isinstance(m, AssistantMessage):
+                    if isinstance(m, StreamEvent):
+                        event = m.event if hasattr(m, 'event') else m
+                        etype = event.get("type", "") if isinstance(event, dict) else ""
+
+                        if etype == "content_block_start":
+                            cb = event.get("content_block", {})
+                            if cb.get("type") == "tool_use":
+                                in_tool = True
+                                current_tool_name = cb.get("name", "")
+                                reporter.on_tool_start(current_tool_name)
+                            else:
+                                in_tool = False
+
+                        elif etype == "content_block_delta":
+                            delta = event.get("delta", {})
+                            if delta.get("type") == "text_delta" and not in_tool:
+                                chunk = delta.get("text", "")
+                                if chunk:
+                                    reporter.on_text_delta(chunk)
+
+                        elif etype == "content_block_stop":
+                            in_tool = False
+                            current_tool_name = None
+
+                    elif isinstance(m, AssistantMessage):
                         for b in m.content:
                             if isinstance(b, TextBlock) and b.text.strip():
                                 reporter.on_text(b.text.strip())
@@ -198,6 +233,7 @@ async def run(num_runs, reporter=None, config=None):
                                 else:
                                     label = _tool_label(b.name, inp, cmd)
                                     reporter.on_tool_use(b.name, label)
+
                     elif isinstance(m, ResultMessage):
                         cost = m.total_cost_usd or 0
                         total_cost += cost

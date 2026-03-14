@@ -387,10 +387,31 @@ class DashboardReporter(LoopReporter):
     def on_text(self, text):
         self._touch()
         self._flush_reads()
-        for line in text.strip().split("\n")[:3]:
+        # Full text arrives after streaming — skip if we already streamed it
+        pass
+
+    def on_text_delta(self, chunk):
+        """Streaming text chunk — show agent thinking in real time."""
+        self._touch()
+        self._flush_reads()
+        # Accumulate chunks, write line when we get a newline
+        if not hasattr(self, '_text_buf'):
+            self._text_buf = ""
+        self._text_buf += chunk
+        while "\n" in self._text_buf:
+            line, self._text_buf = self._text_buf.split("\n", 1)
             line = line.strip()
             if line:
-                self._log(f"  [dim italic]  {line[:120]}[/dim italic]")
+                self._log(f"  [dim italic]{line[:120]}[/dim italic]")
+
+    def on_tool_start(self, name):
+        """Tool call beginning — show immediately before we know the details."""
+        self._touch()
+        self._flush_reads()
+        # Flush any remaining text buffer
+        if hasattr(self, '_text_buf') and self._text_buf.strip():
+            self._log(f"  [dim italic]{self._text_buf.strip()[:120]}[/dim italic]")
+            self._text_buf = ""
 
     def on_tool_use(self, name, label):
         self._touch()
