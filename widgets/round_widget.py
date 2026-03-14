@@ -2,6 +2,7 @@
 
 from textual.app import ComposeResult
 from textual.containers import VerticalGroup
+from textual.widget import Widget
 from textual.widgets import Static
 
 
@@ -25,3 +26,13 @@ class RoundWidget(VerticalGroup):
             f"── Round {self.round_num}/{self.num_runs} ──",
             classes="round-header",
         )
+
+    async def mount(self, *widgets: Widget, **kwargs) -> None:
+        """Mount child widget and scroll parent window to bottom."""
+        await super().mount(*widgets, **kwargs)
+        try:
+            from widgets.experiment_window import ExperimentWindow
+            window = self.query_ancestor(ExperimentWindow)
+            window.call_after_refresh(window.scroll_end, animate=False)
+        except Exception:
+            pass

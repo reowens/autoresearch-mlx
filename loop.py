@@ -268,6 +268,8 @@ async def run(num_runs, reporter=None, config=None):
 
         except KeyboardInterrupt:
             raise
+        except asyncio.CancelledError:
+            raise  # Don't treat cancellation as a round failure
         except Exception as e:
             log.exception("Round %d failed", round_num)
             await reporter.on_round_failed(f"{type(e).__name__}: {e}")

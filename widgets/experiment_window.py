@@ -21,5 +21,5 @@ class ExperimentWindow(VerticalScroll):
     async def post_widget(self, widget: Widget) -> Widget:
         """Mount a widget to the contents and scroll to show it."""
         await self.query_one("#contents").mount(widget)
-        self.scroll_end(animate=False)
+        self.call_after_refresh(self.scroll_end, animate=False)
         return widget
