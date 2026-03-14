@@ -214,7 +214,7 @@ class GPT(nn.Module):
 
         valid = targets != -1
         targets_safe = mx.where(valid, targets, mx.zeros_like(targets))
-        ce = nn.losses.cross_entropy(logits, targets_safe, reduction="none")
+        ce = nn.losses.cross_entropy(logits, targets_safe, reduction="none", label_smoothing=0.1)
         ce = ce * valid
         if reduction == "none":
             return ce
