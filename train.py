@@ -438,7 +438,7 @@ class MuonAdamW:
 
 # Model architecture
 ASPECT_RATIO = 64
-HEAD_DIM = 64
+HEAD_DIM = 32
 WINDOW_PATTERN = "SSSL"
 
 # Optimization (MuonAdamW: Muon for block matrices, AdamW for embeddings/scalars)
@@ -456,7 +456,7 @@ FINAL_LR_FRAC = 0.0
 # Model size
 DEPTH = 4
 DEVICE_BATCH_SIZE = 8
-FINAL_EVAL_BATCH_SIZE = 256
+FINAL_EVAL_BATCH_SIZE = 128
 STARTUP_EXCLUDE_STEPS = 10
 
 
