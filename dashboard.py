@@ -586,15 +586,15 @@ class DashboardScreen(Screen):
     }
 
     #progress-panel {
-        dock: bottom; height: auto; max-height: 6;
+        dock: bottom; height: auto; max-height: 8;
         border: round $primary; background: $surface; padding: 0 1;
     }
-    #session-row { height: 1; }
-    #round-bar { width: 1fr; }
-    #session-info { width: auto; height: 1; color: $text-muted; }
-    #train-row { height: 1; display: none; }
-    #train-bar { width: 1fr; }
-    #train-stats { width: auto; height: 1; color: $text-muted; }
+    #session-row { height: 3; }
+    #round-bar { width: 1fr; height: 3; }
+    #session-info { width: auto; height: 3; content-align-vertical: middle; color: $text-muted; }
+    #train-row { height: 3; display: none; }
+    #train-bar { width: 1fr; height: 3; }
+    #train-stats { width: auto; height: 3; content-align-vertical: middle; color: $text-muted; }
     #best-row { height: 1; }
     #best-label { width: auto; height: 1; text-style: bold; }
     #bpb-sparkline { width: 1fr; height: 1; }
