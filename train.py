@@ -219,11 +219,7 @@ class GPT(nn.Module):
         if reduction == "none":
             return ce
         denom = mx.maximum(mx.sum(valid), 1)
-        loss = mx.sum(ce) / denom
-        # Z-loss: penalize large logits to improve stability (PaLM-style)
-        log_z = mx.logsumexp(logits, axis=-1)
-        z_loss = 1e-4 * mx.mean(log_z * log_z)
-        return loss + z_loss
+        return mx.sum(ce) / denom
 
 
 # ---------------------------------------------------------------------------
