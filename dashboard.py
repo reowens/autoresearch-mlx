@@ -388,12 +388,14 @@ class DashboardReporter(LoopReporter):
             return
         self.screen._training_shown = True
         self.screen.phase = "training"
-        self.screen.query_one("#train-panel").display = True
+        panel = self.screen.query_one("#train-panel")
+        panel.display = True
         self.screen.query_one("#train-bar", ProgressBar).update(total=100, progress=0)
         self.screen.query_one("#train-stats", Static).update(" starting...")
         self.screen.query_one("#activity", RichLog).write(
             "  [bold green]▶ training[/bold green]"
         )
+        logging.getLogger("dashboard").info("Training panel shown")
 
     def on_round_done(self, round_cost, total_cost):
         self._touch()
