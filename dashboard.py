@@ -448,9 +448,12 @@ class DashboardReporter(LoopReporter):
     def on_finished(self, num_runs, elapsed_min, total_cost):
         self._flush_reads()
         self.screen.phase = "done"
+        self.screen.query_one("#train-row").display = False
         self.screen.query_one("#round-bar", ProgressBar).update(
             total=num_runs, progress=num_runs
         )
+        # Freeze the header with final time
+        self.screen._update_header()
         self._log(f"\n[bold]Done — {num_runs} rounds · {elapsed_min:.0f}m · ${total_cost:.2f}[/bold]")
         self.screen.app.bell()
 
@@ -561,6 +564,8 @@ class DashboardScreen(Screen):
     # ── Periodic ──
 
     def _tick(self) -> None:
+        if self.phase == "done":
+            return  # stop updating after completion
         self._update_header()
         self._update_cost()
         if self.phase == "training":
@@ -639,25 +644,19 @@ class DashboardScreen(Screen):
         rows = [l.split("\t") for l in data_lines]
         kept = [r for r in rows if r[3] == "keep"]
         best_bpb = min((float(r[1]) for r in kept), default=None) if kept else None
-        # Find best, baseline (first kept), and rest
-        best_row = None
-        baseline_row = None
-        other_rows = []
-        for r in rows:
-            is_best = best_bpb and r[3] == "keep" and float(r[1]) == best_bpb
-            if is_best and not best_row:
-                best_row = r
-            elif r == rows[0] and r[3] == "keep":
-                baseline_row = r
-            else:
-                other_rows.append(r)
-        # Sort: best, baseline, then rest reversed (most recent first)
+        baseline = rows[0] if rows and rows[0][3] == "keep" else None
+        best = next((r for r in kept if best_bpb and float(r[1]) == best_bpb), None)
+        # Order: best first, baseline, then rest reversed (most recent first)
+        shown = set()
         sorted_rows = []
-        if best_row:
-            sorted_rows.append(best_row)
-        if baseline_row and baseline_row != best_row:
-            sorted_rows.append(baseline_row)
-        sorted_rows.extend(reversed(other_rows))
+        for r in [best, baseline]:
+            if r and id(r) not in shown:
+                sorted_rows.append(r)
+                shown.add(id(r))
+        for r in reversed(rows):
+            if id(r) not in shown:
+                sorted_rows.append(r)
+                shown.add(id(r))
         for cols in sorted_rows:
             status, bpb = cols[3], cols[1]
             is_best = best_bpb and status == "keep" and float(bpb) == best_bpb
