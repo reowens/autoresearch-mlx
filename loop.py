@@ -60,9 +60,9 @@ class LoopReporter:
     def on_tool_start(self, name): pass
     def on_tool_use(self, name, label): pass
     def on_training_detected(self): pass
-    def on_round_done(self, round_cost, total_cost): pass
+    def on_round_done(self, round_cost, total_cost, usage=None): pass
     def on_round_failed(self, error): pass
-    def on_finished(self, num_runs, elapsed_min, total_cost): pass
+    def on_finished(self, num_runs, elapsed_min, total_cost, total_usage=None): pass
     def on_stderr(self, line): pass
 
 
@@ -91,9 +91,14 @@ class CLIReporter(LoopReporter):
     def on_training_detected(self):
         print("  > training (~5 min)...")
 
-    def on_round_done(self, round_cost, total_cost):
+    def on_round_done(self, round_cost, total_cost, usage=None):
         cost_note = " (included)" if round_cost == 0 else ""
-        print(f"  --- round done (${round_cost:.2f}{cost_note} | total ${total_cost:.2f}) ---\n")
+        tokens = ""
+        if usage:
+            inp = usage.get("input_tokens", 0)
+            out = usage.get("output_tokens", 0)
+            tokens = f" | {(inp + out) // 1000}k tokens"
+        print(f"  --- round done (${round_cost:.2f}{cost_note}{tokens} | total ${total_cost:.2f}) ---\n")
 
     def on_round_failed(self, error):
         print(f"  --- round failed: {error} ---\n")
@@ -101,8 +106,13 @@ class CLIReporter(LoopReporter):
     def on_stderr(self, line):
         print(f"  [SDK] {line}", file=sys.stderr)
 
-    def on_finished(self, num_runs, elapsed_min, total_cost):
-        print(f"\n  Done — {num_runs} rounds, {elapsed_min:.0f}m, ${total_cost:.2f}.")
+    def on_finished(self, num_runs, elapsed_min, total_cost, total_usage=None):
+        tokens = ""
+        if total_usage:
+            inp = total_usage.get("input_tokens", 0)
+            out = total_usage.get("output_tokens", 0)
+            tokens = f", {(inp + out) // 1000}k tokens"
+        print(f"\n  Done — {num_runs} rounds, {elapsed_min:.0f}m, ${total_cost:.2f}{tokens}.")
         print_results()
 
 
@@ -144,6 +154,7 @@ async def run(num_runs, reporter=None, config=None):
 
     start = time.time()
     total_cost = 0.0
+    total_usage = {"input_tokens": 0, "output_tokens": 0}
 
     model = config.get("model", os.environ.get("MODEL", "opus"))
     effort = config.get("effort", "medium")
@@ -244,11 +255,16 @@ async def run(num_runs, reporter=None, config=None):
                     elif isinstance(m, ResultMessage):
                         cost = m.total_cost_usd or 0
                         total_cost += cost
+                        usage = m.usage or {}
+                        if usage:
+                            total_usage["input_tokens"] += usage.get("input_tokens", 0)
+                            total_usage["output_tokens"] += usage.get("output_tokens", 0)
+                            log.info("Round %d usage: %s", round_num, usage)
                         if hasattr(m, 'subtype') and m.subtype == "error_max_turns":
                             log.warning("Round %d hit max_turns limit", round_num)
                             reporter.on_round_failed("hit turn limit (max_turns=15)")
                         else:
-                            reporter.on_round_done(cost, total_cost)
+                            reporter.on_round_done(cost, total_cost, usage)
                         break
 
         except KeyboardInterrupt:
@@ -258,7 +274,7 @@ async def run(num_runs, reporter=None, config=None):
             reporter.on_round_failed(f"{type(e).__name__}: {e}")
 
     elapsed = (time.time() - start) / 60
-    reporter.on_finished(num_runs, elapsed, total_cost)
+    reporter.on_finished(num_runs, elapsed, total_cost, total_usage)
 
 
 # ── CLI entry point ───────────────────────────────────────────────────────────

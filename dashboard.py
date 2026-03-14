@@ -504,11 +504,15 @@ class DashboardReporter(LoopReporter):
         self.screen.query_one("#train-stats", Static).update(" starting...")
         self._log("  [bold green]▶ Training[/bold green]")
 
-    def on_round_done(self, round_cost, total_cost):
+    def on_round_done(self, round_cost, total_cost, usage=None):
         self._touch()
         self._flush_reads()
         self._flush_text()
         self.screen.total_cost = total_cost
+        if usage:
+            inp = usage.get("input_tokens", 0)
+            out = usage.get("output_tokens", 0)
+            self.screen._total_tokens += inp + out
         self.screen.phase = "idle"
         self.screen.query_one("#train-row").display = False
         # Show result with delta from best
@@ -544,7 +548,7 @@ class DashboardReporter(LoopReporter):
         self._log(f"  [bold red]✗ failed: {error}[/bold red]")
         self._round_summaries.append(f"R{self.screen.round_num}: ✗ fail")
 
-    def on_finished(self, num_runs, elapsed_min, total_cost):
+    def on_finished(self, num_runs, elapsed_min, total_cost, total_usage=None):
         self._flush_reads()
         self._flush_text()
         self.screen.phase = "done"
@@ -557,7 +561,10 @@ class DashboardReporter(LoopReporter):
         if self._round_summaries:
             summary = " | ".join(self._round_summaries)
             self._log(f"\n  [bold]{summary}[/bold]")
-        self._log(f"[bold]Done — {num_runs} rounds · {elapsed_min:.0f}m · ${total_cost:.2f}[/bold]")
+        tokens = ""
+        if self.screen._total_tokens > 0:
+            tokens = f" · {self.screen._total_tokens // 1000}k tokens"
+        self._log(f"[bold]Done — {num_runs} rounds · {elapsed_min:.0f}m · ${total_cost:.2f}{tokens}[/bold]")
         self.screen.app.bell()
 
     def on_stderr(self, line):
@@ -622,6 +629,7 @@ class DashboardScreen(Screen):
         self._last_msg_time = time.time()
         self._thinking_dots = 0
         self._bpb_history = []
+        self._total_tokens = 0
 
     def compose(self) -> ComposeResult:
         yield Static(id="dash-header")
@@ -690,7 +698,8 @@ class DashboardScreen(Screen):
         cost = f"${self.total_cost:.2f}"
         if self.total_cost == 0 and self.round_num > 0:
             cost += " (incl)"
-        self.query_one("#session-info", Static).update(f"  {r} · {cost}")
+        tokens = f" · {self._total_tokens // 1000}k tok" if self._total_tokens > 0 else ""
+        self.query_one("#session-info", Static).update(f"  {r} · {cost}{tokens}")
 
     def _load_bpb_history(self) -> None:
         try:
