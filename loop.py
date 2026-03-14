@@ -194,6 +194,7 @@ async def run(num_runs, reporter=None, config=None):
                 current_tool_name = None
 
                 async for m in client.receive_response():
+                    loop_log.debug("msg type=%s", type(m).__name__)
                     if isinstance(m, StreamEvent):
                         event = m.event if hasattr(m, 'event') else m
                         etype = event.get("type", "") if isinstance(event, dict) else ""
