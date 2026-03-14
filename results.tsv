@@ -40,3 +40,4 @@ c5fb70a	1.311165	21.2	discard	reduce weight decay 0.2 -> 0.1 (with depth 6 + GQA
 3ac97fe	0.000000	0.0	crash	wider model 320 (ASPECT_RATIO=48) — n_head=5 not divisible by n_kv_head=2
 ce2e51c	1.407101	21.4	discard	SwiGLU MLP with FLOP-matched 8/3 expansion (depth6 + GQA)
 f0f25bb	1.409689	21.1	discard	full attention (WINDOW_PATTERN=L) with depth 6 + GQA
+a391d79	1.441161	21.2	discard	reduce Muon ns_steps from 5 to 3 (quality loss outweighs speed gain)
