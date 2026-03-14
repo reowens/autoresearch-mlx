@@ -30,6 +30,7 @@ from textual.widgets import (
     ProgressBar,
     RichLog,
     Select,
+    Sparkline,
     Static,
 )
 
@@ -389,6 +390,7 @@ class DashboardReporter(LoopReporter):
         self.screen = screen
         self._read_buffer = []
         self._text_buf = ""
+        self._round_summaries = []
 
     def _touch(self):
         self.screen._last_msg_time = time.time()
@@ -397,7 +399,7 @@ class DashboardReporter(LoopReporter):
     def _flush_reads(self):
         if self._read_buffer:
             files = ", ".join(self._read_buffer)
-            self.screen.query_one("#activity", RichLog).write(f"  [dim]Read {files}[/dim]")
+            self.screen.query_one("#activity", RichLog).write(f"  [dim]📖 {files}[/dim]")
             self._read_buffer = []
 
     def _flush_text(self):
@@ -408,7 +410,6 @@ class DashboardReporter(LoopReporter):
             self._text_buf = ""
 
     def _log(self, markup):
-        # Convert markdown to Rich markup
         markup = re.sub(r'\*\*(.+?)\*\*', r'[bold]\1[/bold]', markup)
         markup = re.sub(r'`(.+?)`', r'[cyan]\1[/cyan]', markup)
         self.screen.query_one("#activity", RichLog).write(markup)
@@ -428,12 +429,12 @@ class DashboardReporter(LoopReporter):
         self.screen.query_one("#round-bar", ProgressBar).update(
             total=num_runs, progress=round_num - 1
         )
+        self.screen._update_session_info()
         if round_num > 1:
             self._log("")
         self._log(f"[bold]── Round {round_num}/{num_runs} ──[/bold]")
 
     def on_text(self, text):
-        """Full text from AssistantMessage. Show if streaming didn't catch it."""
         self._touch()
         self._flush_reads()
         if not self._text_buf:
@@ -441,7 +442,6 @@ class DashboardReporter(LoopReporter):
                 line = line.strip()
                 if not line:
                     continue
-                # Highlight result lines and summaries
                 if line.startswith("- "):
                     self._log(f"  {line[:140]}")
                 elif "val_bpb" in line or "improved" in line.lower() or "discard" in line.lower():
@@ -477,16 +477,13 @@ class DashboardReporter(LoopReporter):
             return
         self._flush_reads()
         self._flush_text()
-        # After training ends, next tool call = back to experimenting
         if self.screen._training_shown and self.screen.phase == "training":
             self.screen.phase = "experimenting"
             self.screen.query_one("#train-row").display = False
-        # Extract experiment description from commit messages
         if name == "Bash" and "experiment:" in str(label):
             desc = str(label).split("experiment:")[-1].strip().rstrip('"').rstrip("'")
             if desc:
-                self._log(f"  [bold]📋 {desc}[/bold]")
-        # Display
+                self._log(f"  [bold]🧪 {desc}[/bold]")
         if name == "Bash":
             self._log(f"  [cyan]{label}[/cyan]")
         elif name in ("Edit", "Write"):
@@ -514,9 +511,29 @@ class DashboardReporter(LoopReporter):
         self.screen.total_cost = total_cost
         self.screen.phase = "idle"
         self.screen.query_one("#train-row").display = False
-        note = " (included)" if round_cost == 0 else ""
-        self._log(f"  [green]✓ done[/green] · ${round_cost:.2f}{note}")
+        # Show result with delta from best
+        try:
+            with open(RESULTS_PATH) as f:
+                last = f.readlines()[-1].strip().split("\t")
+            bpb = float(last[1])
+            status = last[3]
+            results = get_results_summary()
+            best = results["best_bpb"] if results else None
+            if best:
+                delta = bpb - best
+                delta_str = f"+{delta:.4f}" if delta >= 0 else f"{delta:.4f}"
+                icon = "✓" if status == "keep" else "✗"
+                color = "green" if status == "keep" else ("yellow" if delta < 0.02 else "dim")
+                self._log(f"  [{color}]{icon} {bpb:.4f} ({delta_str} vs best)[/{color}]")
+                self._round_summaries.append(f"R{self.screen.round_num}: {icon} {bpb:.4f}")
+            else:
+                self._log(f"  [green]✓ done[/green]")
+        except Exception:
+            note = " (included)" if round_cost == 0 else ""
+            self._log(f"  [green]✓ done[/green] · ${round_cost:.2f}{note}")
+        self.screen._update_session_info()
         self.screen.refresh_results()
+        self.screen._load_bpb_history()
 
     def on_round_failed(self, error):
         self._touch()
@@ -525,6 +542,7 @@ class DashboardReporter(LoopReporter):
         self.screen.phase = "error"
         self.screen.query_one("#train-row").display = False
         self._log(f"  [bold red]✗ failed: {error}[/bold red]")
+        self._round_summaries.append(f"R{self.screen.round_num}: ✗ fail")
 
     def on_finished(self, num_runs, elapsed_min, total_cost):
         self._flush_reads()
@@ -535,7 +553,11 @@ class DashboardReporter(LoopReporter):
             total=num_runs, progress=num_runs
         )
         self.screen._update_header()
-        self._log(f"\n[bold]Done — {num_runs} rounds · {elapsed_min:.0f}m · ${total_cost:.2f}[/bold]")
+        self.screen._update_session_info()
+        if self._round_summaries:
+            summary = " | ".join(self._round_summaries)
+            self._log(f"\n  [bold]{summary}[/bold]")
+        self._log(f"[bold]Done — {num_runs} rounds · {elapsed_min:.0f}m · ${total_cost:.2f}[/bold]")
         self.screen.app.bell()
 
     def on_stderr(self, line):
@@ -546,33 +568,34 @@ class DashboardScreen(Screen):
     CSS = """
     DashboardScreen { layout: vertical; }
 
-    #status-panel {
-        dock: top;
-        height: auto;
-        max-height: 5;
-        background: $surface;
-        border-bottom: solid $primary;
-        padding: 0 1;
+    #dash-header {
+        dock: top; height: 1;
+        background: $primary; color: $text; text-style: bold; padding: 0 1;
     }
-    #status-header { height: 1; text-style: bold; }
-    #progress-row { height: 1; }
+
+    #activity {
+        height: 1fr; min-height: 6;
+        scrollbar-size: 0 0;
+    }
+
+    #progress-panel {
+        dock: bottom; height: auto; max-height: 6;
+        border: round $primary; background: $surface; padding: 0 1;
+    }
+    #session-row { height: 1; }
     #round-bar { width: 1fr; }
-    #progress-cost { width: auto; height: 1; color: $text-muted; }
+    #session-info { width: auto; height: 1; color: $text-muted; }
     #train-row { height: 1; display: none; }
     #train-bar { width: 1fr; }
     #train-stats { width: auto; height: 1; color: $text-muted; }
-
-    #activity {
-        height: 1fr;
-        min-height: 6;
-        scrollbar-size: 0 0;
-        border-bottom: solid $primary;
-    }
+    #best-row { height: 1; }
+    #best-label { width: auto; height: 1; text-style: bold; }
+    #bpb-sparkline { width: 1fr; height: 1; }
+    #bpb-sparkline > .sparkline--max-color { color: $error; }
+    #bpb-sparkline > .sparkline--min-color { color: $success; }
 
     #results {
-        dock: bottom;
-        height: auto;
-        max-height: 8;
+        dock: bottom; height: auto; max-height: 8;
     }
     DataTable > .datatable--odd-row { background: $surface; }
     """
@@ -598,15 +621,17 @@ class DashboardScreen(Screen):
         self._training_shown = False
         self._last_msg_time = time.time()
         self._thinking_dots = 0
+        self._bpb_history = []
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="status-panel"):
-            yield Static(id="status-header")
+        yield Static(id="dash-header")
+        yield RichLog(highlight=True, markup=True, id="activity")
+        with Vertical(id="progress-panel"):
             yield Horizontal(
                 ProgressBar(total=100, show_eta=False, show_percentage=False,
                             gradient=ROUND_GRADIENT, id="round-bar"),
-                Static("", id="progress-cost"),
-                id="progress-row",
+                Static("", id="session-info"),
+                id="session-row",
             )
             yield Horizontal(
                 ProgressBar(total=100, show_eta=False,
@@ -614,13 +639,18 @@ class DashboardScreen(Screen):
                 Static("", id="train-stats"),
                 id="train-row",
             )
-        yield RichLog(highlight=True, markup=True, id="activity")
+            yield Horizontal(
+                Static("", id="best-label"),
+                Sparkline([], id="bpb-sparkline"),
+                id="best-row",
+            )
         yield DataTable(id="results", zebra_stripes=True)
         yield Footer()
 
     def on_mount(self) -> None:
         self._update_header()
-        self._update_cost()
+        self._update_session_info()
+        self._load_bpb_history()
         self.refresh_results()
         self.set_interval(1.0, self._tick)
         self.run_loop()
@@ -629,7 +659,6 @@ class DashboardScreen(Screen):
         if self.phase == "done":
             return
         self._update_header()
-        self._update_cost()
         if self.phase == "training":
             self._poll_run_log()
 
@@ -652,15 +681,34 @@ class DashboardScreen(Screen):
         else:
             suffix = ""
 
-        self.query_one("#status-header", Static).update(
+        self.query_one("#dash-header", Static).update(
             f" {self._branch}  ·  {self.model_name}/{effort}  ·  {r}  ·  {elapsed}{suffix}"
         )
 
-    def _update_cost(self) -> None:
-        cost = f"  ${self.total_cost:.2f}"
+    def _update_session_info(self) -> None:
+        r = f"{self.round_num}/{self.num_runs}" if self.num_runs else "0/0"
+        cost = f"${self.total_cost:.2f}"
         if self.total_cost == 0 and self.round_num > 0:
-            cost += " (included)"
-        self.query_one("#progress-cost", Static).update(cost)
+            cost += " (incl)"
+        self.query_one("#session-info", Static).update(f"  {r} · {cost}")
+
+    def _load_bpb_history(self) -> None:
+        try:
+            with open(RESULTS_PATH) as f:
+                lines = [l.strip() for l in f if l.strip()]
+            self._bpb_history = [
+                float(l.split("\t")[1]) for l in lines[1:]
+                if len(l.split("\t")) >= 5
+            ]
+            self._update_sparkline()
+        except Exception:
+            pass
+
+    def _update_sparkline(self) -> None:
+        if self._bpb_history:
+            self.query_one("#bpb-sparkline", Sparkline).data = self._bpb_history
+            best = min(self._bpb_history)
+            self.query_one("#best-label", Static).update(f" ★ {best:.4f} ")
 
     def _poll_run_log(self) -> None:
         if not os.path.exists(RUN_LOG_PATH):
@@ -718,14 +766,17 @@ class DashboardScreen(Screen):
             for cols in sorted_rows:
                 status, bpb = cols[3], cols[1]
                 is_best = best_bpb and status == "keep" and float(bpb) == best_bpb
+                delta = float(bpb) - best_bpb if best_bpb else 999
                 if is_best:
                     icon = "[bold green]★[/]"
                 elif status == "keep":
                     icon = "[green]✓[/]"
-                elif status == "discard":
-                    icon = "[dim]✗[/]"
-                else:
+                elif delta < 0.02:
+                    icon = "[yellow]~[/]"
+                elif delta > 1.0:
                     icon = "[red]![/]"
+                else:
+                    icon = "[dim]✗[/]"
                 table.add_row(icon, bpb, cols[2], cols[4])
         except Exception:
             pass

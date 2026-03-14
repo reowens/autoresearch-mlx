@@ -32,3 +32,4 @@ bf39c34	1.392430	21.2	discard	depth 5 with model_dim 256 (ASPECT_RATIO=51; slowe
 4b8902e	1.370069	21.2	discard	RoPE base frequency 10000 -> 50000
 210c2c3	1.372004	21.2	discard	increase logit soft-cap from 15 to 30
 7aa2e44	1.305247	21.1	keep	GQA with n_kv_head=2 (half KV heads for faster steps)
+8829baa	1.283247	21.2	keep	depth 6 with GQA (ASPECT_RATIO=42 keeps model_dim=256)
