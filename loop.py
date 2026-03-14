@@ -229,6 +229,9 @@ async def run(num_runs, reporter=None, config=None):
     log.info("Config: model=%s effort=%s time_budget=%dm", model, effort, time_budget_min)
 
     for round_num in range(1, num_runs + 1):
+        if hasattr(reporter, 'stop_requested') and reporter.stop_requested:
+            log.info("Graceful stop requested after round %d", round_num - 1)
+            break
         elapsed = (time.time() - start) / 60
         await reporter.on_round_start(round_num, num_runs, elapsed, total_cost)
 
@@ -327,6 +330,16 @@ def dry_run():
 
 
 def main():
+    if os.environ.get("CLAUDECODE"):
+        sys.exit(
+            "\n  Error: loop.py can't run inside Claude Code (nested sessions aren't supported).\n"
+            "  Open a separate terminal and run:\n\n"
+            f"    cd {DIR}\n"
+            f"    uv run start.py          # TUI with settings (time budget, model, etc.)\n"
+            f"    uv run start.py 8        # TUI, skip to 8 runs with saved settings\n"
+            f"    uv run loop.py 8         # headless CLI (set TIME_BUDGET=600 for 10 min)\n"
+        )
+
     args = [a for a in sys.argv[1:] if a != "--dry-run"]
     if "--dry-run" in sys.argv:
         dry_run()

@@ -374,6 +374,10 @@ class DashboardReporter(LoopReporter):
         self._thinking_widget = None
         self._round_summaries = []
 
+    @property
+    def stop_requested(self):
+        return self.screen._stop_requested
+
     def _touch(self):
         self.screen._last_msg_time = time.time()
         self.screen._thinking_dots = 0
@@ -597,6 +601,8 @@ class DashboardScreen(Screen):
         self._thinking_indicator = None
         self._reporter = None
         self._best_bpb = None
+        self._stop_requested = False
+        self._last_ctrl_c = 0.0
 
     def compose(self) -> ComposeResult:
         yield Static(id="status-line")
@@ -633,10 +639,13 @@ class DashboardScreen(Screen):
 
     def _update_header(self) -> None:
         effort = self.cfg.get("effort", "medium")
+        tb = self.cfg.get("time_budget", 5)
         elapsed = fmt_elapsed(time.time() - self.start_time)
         r = f"Round {self.round_num}/{self.num_runs}" if self.num_runs else "Starting"
         thinking_secs = time.time() - self._last_msg_time
-        if self.phase == "experimenting" and thinking_secs > 3:
+        if self._stop_requested:
+            suffix = "  ⏸ stopping..."
+        elif self.phase == "experimenting" and thinking_secs > 3:
             self._thinking_dots = (self._thinking_dots % 3) + 1
             dots = "·" * self._thinking_dots + " " * (3 - self._thinking_dots)
             suffix = f"  thinking {dots} ({int(thinking_secs)}s)"
@@ -650,22 +659,28 @@ class DashboardScreen(Screen):
             suffix = ""
         best = f"  ·  best: {self._best_bpb:.4f}" if self._best_bpb else ""
         self.query_one("#status-line", Static).update(
-            f" {self._branch}  ·  {self.model_name}/{effort}  ·  {r}  ·  {elapsed}{best}{suffix}"
+            f" {self._branch}  ·  {self.model_name}/{effort}  ·  {tb}m/run  ·  {r}  ·  {elapsed}{best}{suffix}"
         )
 
     def _update_session_bar(self) -> None:
+        tb = self.cfg.get("time_budget", 5)
         r = f"{self.round_num}/{self.num_runs}" if self.num_runs else "0/0"
         cost = f"${self.total_cost:.2f}"
         if self.total_cost == 0 and self.round_num > 0:
             cost += " (incl)"
         tokens = f" · {self._total_tokens // 1000}k tok" if self._total_tokens > 0 else ""
         if self.num_runs:
+            mins_per = tb + 2
+            remaining_runs = self.num_runs - self.round_num
+            est_left = remaining_runs * mins_per
+            eta = f" · ~{est_left}m left" if remaining_runs > 0 and self.phase != "done" else ""
             bw = 15
             filled = int(bw * self.round_num / self.num_runs)
             bar = f"[green]{'█' * filled}[/][dim]{'░' * (bw - filled)}[/]"
         else:
             bar = f"[dim]{'░' * 15}[/]"
-        self.query_one("#session-bar", Static).update(f" {bar} {r} · {cost}{tokens}")
+            eta = ""
+        self.query_one("#session-bar", Static).update(f" {bar} {r} · {cost}{tokens}{eta}")
 
     def watch_round_num(self) -> None:
         self._update_header()
@@ -736,8 +751,17 @@ class DashboardScreen(Screen):
         self.refresh_results()
 
     def action_quit_app(self) -> None:
-        self.workers.cancel_all()
-        self.app.exit()
+        now = time.time()
+        if now - self._last_ctrl_c < 3.0:
+            # Second press — force quit + clean up
+            self.workers.cancel_all()
+            subprocess.run(["git", "checkout", "--", "train.py"], cwd=DIR, capture_output=True)
+            self.app.exit()
+        else:
+            # First press — request graceful stop
+            self._last_ctrl_c = now
+            self._stop_requested = True
+            self.notify("Stopping after current round... (Ctrl+C again to force)")
 
     def action_restart(self) -> None:
         self.workers.cancel_all()
