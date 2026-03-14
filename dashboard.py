@@ -351,7 +351,12 @@ class DashboardReporter(LoopReporter):
         self.screen.num_runs = num_runs
         self.screen.model_name = model
 
+    def _touch(self):
+        self.screen._last_msg_time = time.time()
+        self.screen._thinking_dots = 0
+
     def on_round_start(self, round_num, num_runs, elapsed_min, total_cost):
+        self._touch()
         self.screen.round_num = round_num
         self.screen.total_cost = total_cost
         self.screen.phase = "experimenting"
@@ -361,14 +366,17 @@ class DashboardReporter(LoopReporter):
         )
 
     def on_text(self, text):
+        self._touch()
         self.screen.query_one("#activity", RichLog).write(f"  [dim]{text[:200]}[/dim]")
 
     def on_tool_use(self, name, label):
+        self._touch()
         self.screen.query_one("#activity", RichLog).write(
             f"  [bold cyan]\\[{name}][/bold cyan] {label}"
         )
 
     def on_training_detected(self):
+        self._touch()
         if self.screen._training_shown:
             return
         self.screen._training_shown = True
@@ -445,6 +453,8 @@ class DashboardScreen(Screen):
         self.start_time = time.time()
         self._branch = get_branch()
         self._training_shown = False
+        self._last_msg_time = time.time()
+        self._thinking_dots = 0
 
     def compose(self) -> ComposeResult:
         yield Static(id="dash-header")
@@ -479,13 +489,25 @@ class DashboardScreen(Screen):
 
     def _update_status(self) -> None:
         elapsed = (time.time() - self.start_time) / 60
-        icon = {"starting": "○", "experimenting": "◉", "training": "▶",
-                "idle": "○", "error": "✗", "done": "✓"}.get(self.phase, "○")
         cost = f"${self.total_cost:.2f}"
         if self.total_cost == 0 and self.round_num > 0:
             cost += " (included)"
+
+        thinking_secs = time.time() - self._last_msg_time
+        if self.phase == "experimenting" and thinking_secs > 3:
+            self._thinking_dots = (self._thinking_dots % 3) + 1
+            dots = "·" * self._thinking_dots + " " * (3 - self._thinking_dots)
+            phase_str = f"thinking {dots} ({int(thinking_secs)}s)"
+            icon = "◉"
+        elif self.phase == "training":
+            icon, phase_str = "▶", "training"
+        else:
+            icon = {"starting": "○", "idle": "○", "error": "✗", "done": "✓",
+                    "experimenting": "◉"}.get(self.phase, "○")
+            phase_str = self.phase
+
         self.query_one("#dash-status", Static).update(
-            f" {elapsed:.0f}m elapsed  ·  {cost}  ·  {icon} {self.phase}"
+            f" {elapsed:.0f}m elapsed  ·  {cost}  ·  {icon} {phase_str}"
         )
 
     def _poll_run_log(self) -> None:

@@ -32,7 +32,7 @@ with open(_prompt_path) as f:
 MINS_PER_RUN = 7  # ~5 min training + ~2 min overhead
 
 MSG_FIRST = (
-    "Read results.tsv and train.py. Run exactly ONE experiment: "
+    "Read results.tsv, train.py, and prepare.py. Run exactly ONE experiment: "
     "modify train.py, commit, train, evaluate, update results.tsv, keep or discard. "
     "IMPORTANT: Run only ONE training run. If it crashes or diverges, log it and STOP. "
     "Do NOT revert and try something else — that counts as a second experiment. "
