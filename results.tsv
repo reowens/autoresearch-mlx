@@ -15,3 +15,4 @@ b76dc62	1.381566	21.2	discard	cosine warmdown schedule (replace linear decay)
 4e18b22	1.379257	21.2	discard	double batch size (DEVICE_BATCH_SIZE=16 TOTAL_BATCH_SIZE=2^15)
 9b60c82	1.375692	21.2	discard	increase matrix LR from 0.04 to 0.05
 02bfdef	1.401088	22.5	discard	increase model width to 320 (ASPECT_RATIO=80)
+c47f355	1.373827	22.2	discard	increase MLP expansion from 4x to 6x
