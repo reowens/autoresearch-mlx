@@ -465,8 +465,9 @@ def get_lr_multiplier(progress):
         return progress / WARMUP_RATIO if WARMUP_RATIO > 0 else 1.0
     if progress < 1.0 - WARMDOWN_RATIO:
         return 1.0
-    cooldown = (1.0 - progress) / WARMDOWN_RATIO
-    return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
+    cooldown = (1.0 - progress) / WARMDOWN_RATIO  # 1 at start of warmdown, 0 at end
+    # Cosine decay: keeps LR higher early in cooldown, drops faster at end
+    return FINAL_LR_FRAC + (1.0 - FINAL_LR_FRAC) * 0.5 * (1 + math.cos(math.pi * (1 - cooldown)))
 
 
 def get_muon_momentum(step):
