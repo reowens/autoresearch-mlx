@@ -29,7 +29,6 @@ from textual.widgets import (
     Label,
     ProgressBar,
     RichLog,
-    Rule,
     Select,
     Static,
 )
@@ -90,26 +89,38 @@ def get_branch():
 
 
 def get_branches():
+    """Get all branches, always including current branch."""
+    current = get_branch()
+    branches = []
+    if current and current != "?":
+        branches.append(current)
     try:
         out = subprocess.check_output(
-            ["git", "branch", "--list", "autoresearch/*"], cwd=DIR, text=True,
+            ["git", "branch", "--list", "autoresearch/*", "experiments"], cwd=DIR, text=True,
         )
-        return [b.strip().removeprefix("* ") for b in out.splitlines() if b.strip()]
+        for b in out.splitlines():
+            name = b.strip().removeprefix("* ")
+            if name and name not in branches:
+                branches.append(name)
     except Exception:
-        return []
+        pass
+    return branches
 
 
 def get_results_summary():
-    if not os.path.exists(RESULTS_PATH) or os.path.getsize(RESULTS_PATH) < 50:
+    try:
+        if not os.path.exists(RESULTS_PATH) or os.path.getsize(RESULTS_PATH) < 50:
+            return None
+        with open(RESULTS_PATH) as f:
+            lines = [l for l in f.readlines() if l.strip()]
+        if len(lines) < 2:
+            return None
+        n = len(lines) - 1
+        kept = [l for l in lines[1:] if "\tkeep\t" in l]
+        best_bpb = min((float(l.split("\t")[1]) for l in kept), default=None)
+        return {"total": n, "kept": len(kept), "best_bpb": best_bpb}
+    except Exception:
         return None
-    with open(RESULTS_PATH) as f:
-        lines = [l for l in f.readlines() if l.strip()]
-    if len(lines) < 2:
-        return None
-    n = len(lines) - 1
-    kept = [l for l in lines[1:] if "\tkeep\t" in l]
-    best_bpb = min((float(l.split("\t")[1]) for l in kept), default=None)
-    return {"total": n, "kept": len(kept), "best_bpb": best_bpb}
 
 
 def data_ok():
@@ -160,6 +171,7 @@ class QuickLaunchScreen(Screen):
         branch = get_branch()
         results = get_results_summary()
         num = int(self.cfg.get("num_runs", 10))
+        effort = self.cfg.get("effort", "medium")
 
         info = branch
         if results:
@@ -186,7 +198,7 @@ class QuickLaunchScreen(Screen):
             yield Static("autoresearch-mlx", id="ql-title")
             yield Static(info)
             yield Static(
-                f"{self.cfg.get('model', 'opus')}/{self.cfg.get('effort', 'high')}",
+                f"{self.cfg.get('model', 'opus')}/{effort}",
                 id="ql-config",
             )
             yield Label(f"Runs ({est_str(num)}):")
@@ -261,17 +273,13 @@ class WizardScreen(Screen):
 
     def compose(self) -> ComposeResult:
         branches = get_branches()
-        current = get_branch()
-        # Always include current branch in options even if not autoresearch/*
-        if current and current not in branches:
-            branches.insert(0, current)
-        branch_opts = [(b, b) for b in branches] + [("+ New branch", "__new__")]
-        default_b = self.cfg.get("branch", current)
-        if default_b not in branches:
+        default_b = self.cfg.get("branch") or (branches[0] if branches else "__new__")
+        if default_b not in branches and default_b != "__new__":
             default_b = branches[0] if branches else "__new__"
 
+        branch_opts = [(b, b) for b in branches] + [("+ New branch", "__new__")]
         models = [("opus", "opus"), ("sonnet", "sonnet"), ("haiku", "haiku")]
-        efforts = [("high", "high"), ("medium", "medium"), ("low", "low")]
+        efforts = [("medium", "medium"), ("high", "high"), ("low", "low")]
 
         with Vertical(id="wiz-box"):
             yield Static("Settings", classes="wiz-heading")
@@ -291,7 +299,7 @@ class WizardScreen(Screen):
             yield Select(models, value=self.cfg.get("model", "opus"), id="wiz-model")
 
             yield Label("Effort:")
-            yield Select(efforts, value=self.cfg.get("effort", "high"), id="wiz-effort")
+            yield Select(efforts, value=self.cfg.get("effort", "medium"), id="wiz-effort")
 
             api_key = os.environ.get("ANTHROPIC_API_KEY", "")
             yield Label("API Key (blank = subscription):")
@@ -328,7 +336,7 @@ class WizardScreen(Screen):
                 subprocess.run(["git", "checkout", "-b", branch], cwd=DIR, capture_output=True)
             else:
                 branch = get_branch()
-        elif branch_val and branch_val != Select.BLANK:
+        elif branch_val:
             branch = str(branch_val)
             subprocess.run(["git", "checkout", branch], cwd=DIR, capture_output=True)
         else:
@@ -338,8 +346,8 @@ class WizardScreen(Screen):
         effort_val = self.query_one("#wiz-effort", Select).value
 
         cfg = {
-            "model": str(model_val) if model_val != Select.BLANK else "opus",
-            "effort": str(effort_val) if effort_val != Select.BLANK else "high",
+            "model": str(model_val) if model_val else "opus",
+            "effort": str(effort_val) if effort_val else "medium",
             "num_runs": self.cfg.get("num_runs", 10),
             "branch": branch,
             "api_key": self.query_one("#wiz-apikey", Input).value.strip(),
@@ -354,6 +362,7 @@ class DashboardReporter(LoopReporter):
     def __init__(self, screen: "DashboardScreen"):
         self.screen = screen
         self._read_buffer = []
+        self._text_buf = ""
 
     def _touch(self):
         self.screen._last_msg_time = time.time()
@@ -365,6 +374,13 @@ class DashboardReporter(LoopReporter):
             self.screen.query_one("#activity", RichLog).write(f"  [dim]Read {files}[/dim]")
             self._read_buffer = []
 
+    def _flush_text(self):
+        if self._text_buf.strip():
+            self.screen.query_one("#activity", RichLog).write(
+                f"  [dim italic]{self._text_buf.strip()[:120]}[/dim italic]"
+            )
+            self._text_buf = ""
+
     def _log(self, markup):
         self.screen.query_one("#activity", RichLog).write(markup)
 
@@ -375,11 +391,11 @@ class DashboardReporter(LoopReporter):
     def on_round_start(self, round_num, num_runs, elapsed_min, total_cost):
         self._touch()
         self._flush_reads()
+        self._flush_text()
         self.screen.round_num = round_num
         self.screen.total_cost = total_cost
         self.screen.phase = "experimenting"
         self.screen._training_shown = False
-        # Update overall progress bar
         self.screen.query_one("#round-bar", ProgressBar).update(
             total=num_runs, progress=round_num - 1
         )
@@ -388,18 +404,19 @@ class DashboardReporter(LoopReporter):
         self._log(f"[bold]── Round {round_num}/{num_runs} ──[/bold]")
 
     def on_text(self, text):
+        """Full text from AssistantMessage. Show if streaming didn't catch it."""
         self._touch()
         self._flush_reads()
-        # Full text arrives after streaming — skip if we already streamed it
-        pass
+        # Only show if we didn't stream it already
+        if not self._text_buf:
+            for line in text.strip().split("\n")[:3]:
+                line = line.strip()
+                if line:
+                    self._log(f"  [dim italic]{line[:120]}[/dim italic]")
 
     def on_text_delta(self, chunk):
-        """Streaming text chunk — show agent thinking in real time."""
         self._touch()
         self._flush_reads()
-        # Accumulate chunks, write line when we get a newline
-        if not hasattr(self, '_text_buf'):
-            self._text_buf = ""
         self._text_buf += chunk
         while "\n" in self._text_buf:
             line, self._text_buf = self._text_buf.split("\n", 1)
@@ -408,13 +425,9 @@ class DashboardReporter(LoopReporter):
                 self._log(f"  [dim italic]{line[:120]}[/dim italic]")
 
     def on_tool_start(self, name):
-        """Tool call beginning — show immediately before we know the details."""
         self._touch()
         self._flush_reads()
-        # Flush any remaining text buffer
-        if hasattr(self, '_text_buf') and self._text_buf.strip():
-            self._log(f"  [dim italic]{self._text_buf.strip()[:120]}[/dim italic]")
-            self._text_buf = ""
+        self._flush_text()
 
     def on_tool_use(self, name, label):
         self._touch()
@@ -422,7 +435,8 @@ class DashboardReporter(LoopReporter):
             self._read_buffer.append(label)
             return
         self._flush_reads()
-        # After training ends, next tool call means we're back to experimenting
+        self._flush_text()
+        # After training ends, next tool call = back to experimenting
         if self.screen._training_shown and self.screen.phase == "training":
             self.screen.phase = "experimenting"
             self.screen.query_one("#train-row").display = False
@@ -431,7 +445,7 @@ class DashboardReporter(LoopReporter):
             desc = str(label).split("experiment:")[-1].strip().rstrip('"').rstrip("'")
             if desc:
                 self._log(f"  [bold]📋 {desc}[/bold]")
-        # Display: Bash shows description only, others show Name + label
+        # Display
         if name == "Bash":
             self._log(f"  [cyan]{label}[/cyan]")
         elif name in ("Edit", "Write"):
@@ -442,6 +456,7 @@ class DashboardReporter(LoopReporter):
     def on_training_detected(self):
         self._touch()
         self._flush_reads()
+        self._flush_text()
         if self.screen._training_shown:
             return
         self.screen._training_shown = True
@@ -450,11 +465,11 @@ class DashboardReporter(LoopReporter):
         self.screen.query_one("#train-bar", ProgressBar).update(total=100, progress=0)
         self.screen.query_one("#train-stats", Static).update(" starting...")
         self._log("  [bold green]▶ training[/bold green]")
-        logging.getLogger("dashboard").info("Training detected, showing train-row")
 
     def on_round_done(self, round_cost, total_cost):
         self._touch()
         self._flush_reads()
+        self._flush_text()
         self.screen.total_cost = total_cost
         self.screen.phase = "idle"
         self.screen.query_one("#train-row").display = False
@@ -465,18 +480,19 @@ class DashboardReporter(LoopReporter):
     def on_round_failed(self, error):
         self._touch()
         self._flush_reads()
+        self._flush_text()
         self.screen.phase = "error"
         self.screen.query_one("#train-row").display = False
         self._log(f"  [bold red]✗ failed: {error}[/bold red]")
 
     def on_finished(self, num_runs, elapsed_min, total_cost):
         self._flush_reads()
+        self._flush_text()
         self.screen.phase = "done"
         self.screen.query_one("#train-row").display = False
         self.screen.query_one("#round-bar", ProgressBar).update(
             total=num_runs, progress=num_runs
         )
-        # Freeze the header with final time
         self.screen._update_header()
         self._log(f"\n[bold]Done — {num_runs} rounds · {elapsed_min:.0f}m · ${total_cost:.2f}[/bold]")
         self.screen.app.bell()
@@ -497,20 +513,11 @@ class DashboardScreen(Screen):
         border-bottom: solid $primary;
         padding: 0 1;
     }
-    #status-header {
-        height: 1;
-        text-style: bold;
-    }
-    #progress-row {
-        height: 1;
-    }
+    #status-header { height: 1; text-style: bold; }
+    #progress-row { height: 1; }
     #round-bar { width: 1fr; }
     #progress-cost { width: auto; height: 1; color: $text-muted; }
-
-    #train-row {
-        height: 1;
-        display: none;
-    }
+    #train-row { height: 1; display: none; }
     #train-bar { width: 1fr; }
     #train-stats { width: auto; height: 1; color: $text-muted; }
 
@@ -526,9 +533,7 @@ class DashboardScreen(Screen):
         height: auto;
         max-height: 8;
     }
-    DataTable > .datatable--odd-row {
-        background: $surface;
-    }
+    DataTable > .datatable--odd-row { background: $surface; }
     """
 
     BINDINGS = [
@@ -554,7 +559,6 @@ class DashboardScreen(Screen):
         self._thinking_dots = 0
 
     def compose(self) -> ComposeResult:
-        # Panel 1: Status (top, fixed)
         with Vertical(id="status-panel"):
             yield Static(id="status-header")
             yield Horizontal(
@@ -569,13 +573,8 @@ class DashboardScreen(Screen):
                 Static("", id="train-stats"),
                 id="train-row",
             )
-
-        # Panel 2: Activity (middle, fills)
         yield RichLog(highlight=True, markup=True, id="activity")
-
-        # Panel 3: Results (bottom, fixed)
         yield DataTable(id="results", zebra_stripes=True)
-
         yield Footer()
 
     def on_mount(self) -> None:
@@ -585,18 +584,16 @@ class DashboardScreen(Screen):
         self.set_interval(1.0, self._tick)
         self.run_loop()
 
-    # ── Periodic ──
-
     def _tick(self) -> None:
         if self.phase == "done":
-            return  # stop updating after completion
+            return
         self._update_header()
         self._update_cost()
         if self.phase == "training":
             self._poll_run_log()
 
     def _update_header(self) -> None:
-        effort = self.cfg.get("effort", "high")
+        effort = self.cfg.get("effort", "medium")
         elapsed = fmt_elapsed(time.time() - self.start_time)
         r = f"Round {self.round_num}/{self.num_runs}" if self.num_runs else "Starting"
 
@@ -643,8 +640,6 @@ class DashboardScreen(Screen):
         except Exception:
             pass
 
-    # ── Reactive watchers ──
-
     def watch_round_num(self) -> None:
         self._update_header()
     def watch_num_runs(self) -> None:
@@ -652,49 +647,47 @@ class DashboardScreen(Screen):
     def watch_model_name(self) -> None:
         self._update_header()
 
-    # ── Results ──
-
     def refresh_results(self) -> None:
         table = self.query_one("#results", DataTable)
         table.clear(columns=True)
         if not os.path.exists(RESULTS_PATH):
             return
-        with open(RESULTS_PATH) as f:
-            lines = [l.strip() for l in f if l.strip()]
-        if len(lines) < 2:
-            return
-        table.add_columns("", "val_bpb", "mem", "description")
-        data_lines = [l for l in lines[1:] if len(l.split("\t")) >= 5]
-        rows = [l.split("\t") for l in data_lines]
-        kept = [r for r in rows if r[3] == "keep"]
-        best_bpb = min((float(r[1]) for r in kept), default=None) if kept else None
-        baseline = rows[0] if rows and rows[0][3] == "keep" else None
-        best = next((r for r in kept if best_bpb and float(r[1]) == best_bpb), None)
-        # Order: best first, baseline, then rest reversed (most recent first)
-        shown = set()
-        sorted_rows = []
-        for r in [best, baseline]:
-            if r and id(r) not in shown:
-                sorted_rows.append(r)
-                shown.add(id(r))
-        for r in reversed(rows):
-            if id(r) not in shown:
-                sorted_rows.append(r)
-                shown.add(id(r))
-        for cols in sorted_rows:
-            status, bpb = cols[3], cols[1]
-            is_best = best_bpb and status == "keep" and float(bpb) == best_bpb
-            if is_best:
-                icon = "[bold green]★[/]"
-            elif status == "keep":
-                icon = "[green]✓[/]"
-            elif status == "discard":
-                icon = "[dim]✗[/]"
-            else:
-                icon = "[red]![/]"
-            table.add_row(icon, bpb, cols[2], cols[4])
-
-    # ── Actions ──
+        try:
+            with open(RESULTS_PATH) as f:
+                lines = [l.strip() for l in f if l.strip()]
+            if len(lines) < 2:
+                return
+            table.add_columns("", "val_bpb", "mem", "description")
+            data_lines = [l for l in lines[1:] if len(l.split("\t")) >= 5]
+            rows = [l.split("\t") for l in data_lines]
+            kept = [r for r in rows if r[3] == "keep"]
+            best_bpb = min((float(r[1]) for r in kept), default=None) if kept else None
+            baseline = rows[0] if rows and rows[0][3] == "keep" else None
+            best = next((r for r in kept if best_bpb and float(r[1]) == best_bpb), None)
+            shown = set()
+            sorted_rows = []
+            for r in [best, baseline]:
+                if r and id(r) not in shown:
+                    sorted_rows.append(r)
+                    shown.add(id(r))
+            for r in reversed(rows):
+                if id(r) not in shown:
+                    sorted_rows.append(r)
+                    shown.add(id(r))
+            for cols in sorted_rows:
+                status, bpb = cols[3], cols[1]
+                is_best = best_bpb and status == "keep" and float(bpb) == best_bpb
+                if is_best:
+                    icon = "[bold green]★[/]"
+                elif status == "keep":
+                    icon = "[green]✓[/]"
+                elif status == "discard":
+                    icon = "[dim]✗[/]"
+                else:
+                    icon = "[red]![/]"
+                table.add_row(icon, bpb, cols[2], cols[4])
+        except Exception:
+            pass
 
     def action_do_refresh(self) -> None:
         self.refresh_results()

@@ -8,7 +8,9 @@ Autonomous experiment loop. Runs ONE experiment per turn.
 """
 
 import asyncio
+import logging
 import os
+import subprocess
 import sys
 import time
 
@@ -52,8 +54,8 @@ class LoopReporter:
     def on_start(self, num_runs, model): pass
     def on_round_start(self, round_num, num_runs, elapsed_min, total_cost): pass
     def on_text(self, text): pass
-    def on_text_delta(self, chunk): pass  # streaming text chunk
-    def on_tool_start(self, name): pass   # tool call beginning
+    def on_text_delta(self, chunk): pass
+    def on_tool_start(self, name): pass
     def on_tool_use(self, name, label): pass
     def on_training_detected(self): pass
     def on_round_done(self, round_cost, total_cost): pass
@@ -75,14 +77,14 @@ class CLIReporter(LoopReporter):
     def on_text(self, text):
         print(f"  {text[:200]}")
 
-    def on_tool_use(self, name, label):
-        print(f"  [{name}] {label}")
-
     def on_text_delta(self, chunk):
         print(chunk, end="", flush=True)
 
     def on_tool_start(self, name):
         print(f"  [{name}] ", end="", flush=True)
+
+    def on_tool_use(self, name, label):
+        print(f"  [{name}] {label}")
 
     def on_training_detected(self):
         print("  > training (~5 min)...")
@@ -120,10 +122,7 @@ def _tool_label(name, inp, cmd):
     """Extract a human-readable label from a tool use block."""
     if name == "Bash":
         return inp.get("description", "") or cmd[:80] or "bash"
-    if name in ("Read", "Write"):
-        path = inp.get("file_path", "")
-        return os.path.basename(path) if path else name
-    if name == "Edit":
+    if name in ("Read", "Write", "Edit"):
         path = inp.get("file_path", "")
         return os.path.basename(path) if path else name
     if name in ("Glob", "Grep"):
@@ -132,6 +131,9 @@ def _tool_label(name, inp, cmd):
 
 
 # ── Core loop ─────────────────────────────────────────────────────────────────
+
+log = logging.getLogger("loop")
+
 
 async def run(num_runs, reporter=None, config=None):
     if reporter is None:
@@ -149,7 +151,6 @@ async def run(num_runs, reporter=None, config=None):
     if api_key:
         env["ANTHROPIC_API_KEY"] = api_key
 
-    import logging
     sdk_log = logging.getLogger("claude_sdk_stderr")
 
     def _on_stderr(line):
@@ -167,7 +168,6 @@ async def run(num_runs, reporter=None, config=None):
         stderr=_on_stderr,
         include_partial_messages=True,
     )
-    # Enable 1M context for API users only
     if api_key:
         try:
             opts.betas = ["context-1m-2025-08-07"]
@@ -175,9 +175,6 @@ async def run(num_runs, reporter=None, config=None):
             pass
 
     reporter.on_start(num_runs, model)
-
-    import logging
-    loop_log = logging.getLogger("loop.run")
 
     async with ClaudeSDKClient(options=opts) as client:
         for round_num in range(1, num_runs + 1):
@@ -188,23 +185,26 @@ async def run(num_runs, reporter=None, config=None):
             msg = prefix + (MSG_FIRST if round_num == 1 else MSG_NEXT)
             try:
                 await client.query(msg)
-                loop_log.info("query sent, waiting for response")
+                log.info("query sent, waiting for response")
 
                 in_tool = False
-                current_tool_name = None
 
                 async for m in client.receive_response():
-                    loop_log.debug("msg type=%s", type(m).__name__)
+                    mtype = type(m).__name__
+                    log.debug("msg: %s", mtype)
+
+                    # StreamEvent — real-time streaming chunks
                     if isinstance(m, StreamEvent):
-                        event = m.event if hasattr(m, 'event') else m
-                        etype = event.get("type", "") if isinstance(event, dict) else ""
+                        event = getattr(m, 'event', m)
+                        if not isinstance(event, dict):
+                            continue
+                        etype = event.get("type", "")
 
                         if etype == "content_block_start":
                             cb = event.get("content_block", {})
                             if cb.get("type") == "tool_use":
                                 in_tool = True
-                                current_tool_name = cb.get("name", "")
-                                reporter.on_tool_start(current_tool_name)
+                                reporter.on_tool_start(cb.get("name", ""))
                             else:
                                 in_tool = False
 
@@ -217,8 +217,8 @@ async def run(num_runs, reporter=None, config=None):
 
                         elif etype == "content_block_stop":
                             in_tool = False
-                            current_tool_name = None
 
+                    # AssistantMessage — complete message with tool calls
                     elif isinstance(m, AssistantMessage):
                         for b in m.content:
                             if isinstance(b, TextBlock) and b.text.strip():
@@ -227,22 +227,25 @@ async def run(num_runs, reporter=None, config=None):
                                 inp = b.input or {}
                                 cmd = inp.get("command", "") if b.name == "Bash" else ""
                                 if b.name == "Bash" and cmd:
-                                    loop_log.debug("Bash cmd: %s", cmd[:120])
+                                    log.debug("Bash: %s", cmd[:120])
                                 if "uv run" in cmd and "train.py" in cmd and ">" in cmd:
-                                    loop_log.info("Training detected: %s", cmd[:120])
+                                    log.info("Training detected")
                                     reporter.on_training_detected()
                                 else:
                                     label = _tool_label(b.name, inp, cmd)
                                     reporter.on_tool_use(b.name, label)
 
+                    # ResultMessage — turn complete
                     elif isinstance(m, ResultMessage):
                         cost = m.total_cost_usd or 0
                         total_cost += cost
                         reporter.on_round_done(cost, total_cost)
                         break
+
             except KeyboardInterrupt:
                 raise
             except Exception as e:
+                log.exception("Round %d failed", round_num)
                 reporter.on_round_failed(f"{type(e).__name__}: {e}")
 
     elapsed = (time.time() - start) / 60
@@ -252,8 +255,6 @@ async def run(num_runs, reporter=None, config=None):
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
 def dry_run():
-    """Show current state without starting the loop."""
-    import subprocess
     branch = "?"
     try:
         branch = subprocess.check_output(
