@@ -52,3 +52,4 @@ ac07e7d	1.442529	21.2	discard	SSLL window pattern (more full-attention layers 4/
 639cb4f	1.442664	21.2	discard	increase embedding LR from 0.6 to 0.8 (much worse; embeddings overfit faster)
 80a83ec	1.470961	21.2	discard	shorten momentum warmup 300->50 steps (much worse; premature high momentum destabilizes)
 222dd4d	1.450454	21.2	discard	reduce embedding LR 0.6->0.4 (much worse; embeddings learn too slowly)
+2860146	1.466512	21.2	discard	increase unembedding LR 0.004->0.01 (much worse; destabilizes lm_head)
