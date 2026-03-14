@@ -27,10 +27,7 @@ from textual.widgets import (
     Footer,
     Input,
     Label,
-    ProgressBar,
-    RichLog,
     Select,
-    Sparkline,
     Static,
 )
 
@@ -41,19 +38,11 @@ RUN_LOG_PATH = os.path.join(DIR, "run.log")
 CONFIG_PATH = os.path.join(DIR, ".autoresearch.json")
 CACHE_DIR = os.path.expanduser("~/.cache/autoresearch")
 
-STEP_RE = re.compile(
-    r"step\s+\d+\s+\(([\d.]+)%\)\s+\|\s+loss:\s+([\d.]+).*?"
-    r"tok/sec:\s+([\d,]+).*?remaining:\s+(\d+)s"
-)
-
-TRAIN_GRADIENT = Gradient.from_colors("#22ccbb", "#44dd88", "#99dd55", "#eedd00", "#ee9944")
-ROUND_GRADIENT = Gradient.from_colors("#0099cc", "#3366bb", "#663399")
-
 DEFAULTS = {
     "model": "opus",
     "effort": "medium",
     "num_runs": 10,
-    "time_budget": 5,  # minutes per training run
+    "time_budget": 5,
     "branch": "",
     "api_key": "",
 }
@@ -91,7 +80,6 @@ def get_branch():
 
 
 def get_branches():
-    """Get all branches, always including current branch."""
     current = get_branch()
     branches = []
     if current and current != "?":
@@ -133,7 +121,7 @@ def data_ok():
 
 
 def est_str(n, time_budget=5):
-    mins_per = time_budget + 2  # training + overhead
+    mins_per = time_budget + 2
     est = n * mins_per
     return f"~{est / 60:.1f}h" if est >= 60 else f"~{est}m"
 
@@ -152,10 +140,8 @@ class QuickLaunchScreen(Screen):
     CSS = """
     QuickLaunchScreen { align: center middle; }
     #ql-box {
-        width: 50;
-        height: auto;
-        border: round $primary;
-        padding: 1 2;
+        width: 50; height: auto;
+        border: round $primary; padding: 1 2;
     }
     #ql-box > Static { height: 1; }
     #ql-box > Label { height: 1; }
@@ -183,29 +169,24 @@ class QuickLaunchScreen(Screen):
             info += f" · {results['total']} exp ({results['kept']} kept)"
             if results["best_bpb"]:
                 info += f" · best {results['best_bpb']:.4f}"
-
         last = self.cfg.get("last_run", "")
         if last:
             try:
                 dt = datetime.datetime.fromisoformat(last)
                 ago = datetime.datetime.now() - dt
                 if ago.total_seconds() < 3600:
-                    ago_str = f"{int(ago.total_seconds() / 60)}m ago"
+                    info += f" · {int(ago.total_seconds() / 60)}m ago"
                 elif ago.total_seconds() < 86400:
-                    ago_str = f"{ago.total_seconds() / 3600:.1f}h ago"
+                    info += f" · {ago.total_seconds() / 3600:.1f}h ago"
                 else:
-                    ago_str = f"{int(ago.days)}d ago"
-                info += f" · {ago_str}"
+                    info += f" · {int(ago.days)}d ago"
             except ValueError:
                 pass
 
         with Vertical(id="ql-box"):
             yield Static("autoresearch-mlx", id="ql-title")
             yield Static(info)
-            yield Static(
-                f"{self.cfg.get('model', 'opus')}/{effort}",
-                id="ql-config",
-            )
+            yield Static(f"{self.cfg.get('model', 'opus')}/{effort}", id="ql-config")
             yield Label(f"Runs ({est_str(num, tb)}):", id="ql-runs-label")
             yield Input(str(num), id="ql-runs-input", type="integer")
             yield Label(f"Training time: {tb} min/run", id="ql-time-label")
@@ -270,10 +251,8 @@ class WizardScreen(Screen):
     CSS = """
     WizardScreen { align: center middle; }
     #wiz-box {
-        width: 50;
-        height: auto;
-        border: round $primary;
-        padding: 1 2;
+        width: 50; height: auto;
+        border: round $primary; padding: 1 2;
     }
     #wiz-box > Static { height: 1; }
     #wiz-box > Label { height: 1; }
@@ -297,39 +276,31 @@ class WizardScreen(Screen):
         default_b = self.cfg.get("branch") or (branches[0] if branches else "__new__")
         if default_b not in branches and default_b != "__new__":
             default_b = branches[0] if branches else "__new__"
-
         branch_opts = [(b, b) for b in branches] + [("+ New branch", "__new__")]
         models = [("opus", "opus"), ("sonnet", "sonnet"), ("haiku", "haiku")]
         efforts = [("medium", "medium"), ("high", "high"), ("low", "low")]
 
         with Vertical(id="wiz-box"):
             yield Static("Settings", classes="wiz-heading")
-
             if data_ok():
                 shards = len([f for f in os.listdir(os.path.join(CACHE_DIR, "data"))
                               if f.endswith(".parquet")])
                 yield Static(f"Data: [green]✓[/] {shards} shards", markup=True)
             else:
                 yield Static("Data: [red]✗[/] not found — run prepare first", markup=True)
-
             yield Label("Branch:")
             yield Select(branch_opts, value=default_b, id="wiz-branch")
             yield Input(placeholder="tag (e.g. mar14)", id="wiz-new-tag")
-
             yield Label("Model:")
             yield Select(models, value=self.cfg.get("model", "opus"), id="wiz-model")
-
             yield Label("Effort:")
             yield Select(efforts, value=self.cfg.get("effort", "medium"), id="wiz-effort")
-
             times = [("5 min", 5), ("10 min", 10), ("15 min", 15), ("20 min", 20)]
             yield Label("Training time per run:")
             yield Select(times, value=self.cfg.get("time_budget", 5), id="wiz-time")
-
             api_key = os.environ.get("ANTHROPIC_API_KEY", "")
             yield Label("API Key (blank = subscription):")
             yield Input(placeholder="sk-ant-...", password=True, id="wiz-apikey", value=api_key)
-
             yield Horizontal(
                 Button("Back", id="wiz-back"),
                 Button("Save", variant="primary", id="wiz-save"),
@@ -366,11 +337,9 @@ class WizardScreen(Screen):
             subprocess.run(["git", "checkout", branch], cwd=DIR, capture_output=True)
         else:
             branch = get_branch()
-
         model_val = self.query_one("#wiz-model", Select).value
         effort_val = self.query_one("#wiz-effort", Select).value
         time_val = self.query_one("#wiz-time", Select).value
-
         cfg = {
             "model": str(model_val) if model_val else "opus",
             "effort": str(effort_val) if effort_val else "medium",
@@ -385,137 +354,131 @@ class WizardScreen(Screen):
 
 # ── DashboardScreen ───────────────────────────────────────────────────────────
 
+from widgets.round_widget import RoundWidget
+from widgets.tool_action import ToolAction
+from widgets.training_progress import TrainingProgress
+from widgets.experiment_window import ExperimentWindow
+
+
 class DashboardReporter(LoopReporter):
+    """Mounts real widgets instead of writing to RichLog."""
+
     def __init__(self, screen: "DashboardScreen"):
         self.screen = screen
         self._read_buffer = []
         self._text_buf = ""
+        self._current_round = None
+        self._training_widget = None
         self._round_summaries = []
 
     def _touch(self):
         self.screen._last_msg_time = time.time()
         self.screen._thinking_dots = 0
 
-    def _flush_reads(self):
-        if self._read_buffer:
+    async def _flush_reads(self):
+        if self._read_buffer and self._current_round:
             files = ", ".join(self._read_buffer)
-            self.screen.query_one("#activity", RichLog).write(f"  [dim]📖 {files}[/dim]")
+            await self._current_round.mount(ToolAction("Read", files))
             self._read_buffer = []
 
-    def _flush_text(self):
-        if self._text_buf.strip():
-            self.screen.query_one("#activity", RichLog).write(
-                f"  [dim italic]{self._text_buf.strip()[:120]}[/dim italic]"
-            )
+    async def _flush_text(self):
+        if self._text_buf.strip() and self._current_round:
+            text = self._text_buf.strip()
+            text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+            text = re.sub(r'`(.+?)`', r'\1', text)
+            for line in text.split("\n")[:3]:
+                line = line.strip()
+                if line:
+                    await self._current_round.mount(
+                        Static(line[:120], classes="thinking-text")
+                    )
             self._text_buf = ""
 
-    def _log(self, markup):
-        markup = re.sub(r'\*\*(.+?)\*\*', r'[bold]\1[/bold]', markup)
-        markup = re.sub(r'`(.+?)`', r'[cyan]\1[/cyan]', markup)
-        self.screen.query_one("#activity", RichLog).write(markup)
-
-    def on_start(self, num_runs, model):
+    async def on_start(self, num_runs, model):
         self.screen.num_runs = num_runs
         self.screen.model_name = model
 
-    def on_round_start(self, round_num, num_runs, elapsed_min, total_cost):
+    async def on_round_start(self, round_num, num_runs, elapsed_min, total_cost):
         self._touch()
-        self._flush_reads()
-        self._flush_text()
+        await self._flush_reads()
+        await self._flush_text()
         self.screen.round_num = round_num
         self.screen.total_cost = total_cost
         self.screen.phase = "experimenting"
-        self.screen._training_shown = False
-        self.screen.query_one("#round-bar", ProgressBar).update(
-            total=num_runs, progress=round_num - 1
-        )
-        self.screen._update_session_info()
-        if round_num > 1:
-            self._log("")
-        self._log(f"[bold]── Round {round_num}/{num_runs} ──[/bold]")
+        self._training_widget = None
+        self._current_round = RoundWidget(round_num, num_runs)
+        await self.screen.query_one(ExperimentWindow).post_widget(self._current_round)
+        self.screen._update_session_bar()
 
-    def on_text(self, text):
+    async def on_text(self, text):
         self._touch()
-        self._flush_reads()
-        if not self._text_buf:
-            for line in text.strip().split("\n"):
+        await self._flush_reads()
+        if not self._text_buf and self._current_round:
+            for line in text.strip().split("\n")[:3]:
                 line = line.strip()
-                if not line:
-                    continue
-                if line.startswith("- "):
-                    self._log(f"  {line[:140]}")
-                elif "val_bpb" in line or "improved" in line.lower() or "discard" in line.lower():
-                    self._log(f"  [bold]{line[:140]}[/bold]")
-                else:
-                    self._log(f"  [dim]{line[:140]}[/dim]")
+                if line:
+                    await self._current_round.mount(
+                        Static(line[:120], classes="thinking-text")
+                    )
 
-    def on_text_delta(self, chunk):
+    async def on_text_delta(self, chunk):
         self._touch()
-        self._flush_reads()
         self._text_buf += chunk
         while "\n" in self._text_buf:
             line, self._text_buf = self._text_buf.split("\n", 1)
             line = line.strip()
-            if not line:
-                continue
-            if line.startswith("- "):
-                self._log(f"  {line[:140]}")
-            elif "val_bpb" in line or "improved" in line.lower() or "discard" in line.lower():
-                self._log(f"  [bold]{line[:140]}[/bold]")
-            else:
-                self._log(f"  [dim]{line[:140]}[/dim]")
+            if line and self._current_round:
+                await self._current_round.mount(
+                    Static(line[:120], classes="thinking-text")
+                )
 
-    def on_tool_start(self, name):
+    async def on_tool_start(self, name):
         self._touch()
-        self._flush_reads()
-        self._flush_text()
+        await self._flush_reads()
+        await self._flush_text()
 
-    def on_tool_use(self, name, label):
+    async def on_tool_use(self, name, label):
         self._touch()
         if name == "Read":
             self._read_buffer.append(label)
             return
-        self._flush_reads()
-        self._flush_text()
-        if self.screen._training_shown and self.screen.phase == "training":
+        await self._flush_reads()
+        await self._flush_text()
+        if self._training_widget and self.screen.phase == "training":
             self.screen.phase = "experimenting"
-            self.screen.query_one("#train-row").display = False
+            self._training_widget.stop()
+        if not self._current_round:
+            return
         if name == "Bash" and "experiment:" in str(label):
             desc = str(label).split("experiment:")[-1].strip().rstrip('"').rstrip("'")
             if desc:
-                self._log(f"  [bold]🧪 {desc}[/bold]")
-        if name == "Bash":
-            self._log(f"  [cyan]{label}[/cyan]")
-        elif name in ("Edit", "Write"):
-            self._log(f"  [yellow]{name}[/yellow] {label}")
-        else:
-            self._log(f"  [dim]{name} {label}[/dim]")
+                await self._current_round.mount(
+                    Static(f"🧪 {desc}", classes="round-header")
+                )
+        await self._current_round.mount(ToolAction(name, label))
 
-    def on_training_detected(self):
+    async def on_training_detected(self):
         self._touch()
-        self._flush_reads()
-        self._flush_text()
-        if self.screen._training_shown:
+        await self._flush_reads()
+        await self._flush_text()
+        if self._training_widget:
             return
-        self.screen._training_shown = True
         self.screen.phase = "training"
-        self.screen.query_one("#train-row").display = True
-        self.screen.query_one("#train-bar", ProgressBar).update(total=100, progress=0)
-        self.screen.query_one("#train-stats", Static).update(" starting...")
-        self._log("  [bold green]▶ Training[/bold green]")
+        self._training_widget = TrainingProgress(RUN_LOG_PATH)
+        if self._current_round:
+            await self._current_round.mount(self._training_widget)
 
-    def on_round_done(self, round_cost, total_cost, usage=None):
+    async def on_round_done(self, round_cost, total_cost, usage=None):
         self._touch()
-        self._flush_reads()
-        self._flush_text()
+        await self._flush_reads()
+        await self._flush_text()
         self.screen.total_cost = total_cost
         if usage:
-            inp = usage.get("input_tokens", 0)
-            out = usage.get("output_tokens", 0)
-            self.screen._total_tokens += inp + out
+            self.screen._total_tokens += usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
         self.screen.phase = "idle"
-        self.screen.query_one("#train-row").display = False
-        # Show result with delta from best
+        if self._training_widget:
+            self._training_widget.stop()
+            self._training_widget = None
         try:
             with open(RESULTS_PATH) as f:
                 last = f.readlines()[-1].strip().split("\t")
@@ -523,89 +486,59 @@ class DashboardReporter(LoopReporter):
             status = last[3]
             results = get_results_summary()
             best = results["best_bpb"] if results else None
-            if best:
+            if best and self._current_round:
                 delta = bpb - best
                 delta_str = f"+{delta:.4f}" if delta >= 0 else f"{delta:.4f}"
                 icon = "✓" if status == "keep" else "✗"
-                color = "green" if status == "keep" else ("yellow" if delta < 0.02 else "dim")
-                self._log(f"  [{color}]{icon} {bpb:.4f} ({delta_str} vs best)[/{color}]")
+                css = "result-keep" if status == "keep" else (
+                    "result-near-miss" if delta < 0.02 else "result-discard"
+                )
+                await self._current_round.mount(
+                    Static(f"{icon} {bpb:.4f} ({delta_str} vs best)", classes=css)
+                )
                 self._round_summaries.append(f"R{self.screen.round_num}: {icon} {bpb:.4f}")
-            else:
-                self._log(f"  [green]✓ done[/green]")
         except Exception:
-            note = " (included)" if round_cost == 0 else ""
-            self._log(f"  [green]✓ done[/green] · ${round_cost:.2f}{note}")
-        self.screen._update_session_info()
+            pass
+        self.screen._update_session_bar()
         self.screen.refresh_results()
-        self.screen._load_bpb_history()
 
-    def on_round_failed(self, error):
+    async def on_round_failed(self, error):
         self._touch()
-        self._flush_reads()
-        self._flush_text()
+        await self._flush_reads()
+        await self._flush_text()
         self.screen.phase = "error"
-        self.screen.query_one("#train-row").display = False
-        self._log(f"  [bold red]✗ failed: {error}[/bold red]")
-        self._round_summaries.append(f"R{self.screen.round_num}: ✗ fail")
+        if self._training_widget:
+            self._training_widget.stop()
+            self._training_widget = None
+        if self._current_round:
+            await self._current_round.mount(
+                Static(f"✗ {error}", classes="result-discard")
+            )
+        self._round_summaries.append(f"R{self.screen.round_num}: ✗")
 
-    def on_finished(self, num_runs, elapsed_min, total_cost, total_usage=None):
-        self._flush_reads()
-        self._flush_text()
+    async def on_finished(self, num_runs, elapsed_min, total_cost, total_usage=None):
+        await self._flush_reads()
+        await self._flush_text()
         self.screen.phase = "done"
-        self.screen.query_one("#train-row").display = False
-        self.screen.query_one("#round-bar", ProgressBar).update(
-            total=num_runs, progress=num_runs
-        )
         self.screen._update_header()
-        self.screen._update_session_info()
+        self.screen._update_session_bar()
+        window = self.screen.query_one(ExperimentWindow)
         if self._round_summaries:
             summary = " | ".join(self._round_summaries)
-            self._log(f"\n  [bold]{summary}[/bold]")
-        tokens = ""
-        if self.screen._total_tokens > 0:
-            tokens = f" · {self.screen._total_tokens // 1000}k tokens"
-        self._log(f"[bold]Done — {num_runs} rounds · {elapsed_min:.0f}m · ${total_cost:.2f}{tokens}[/bold]")
+            await window.post_widget(Static(summary, classes="round-header"))
+        tokens = f" · {self.screen._total_tokens // 1000}k tok" if self.screen._total_tokens > 0 else ""
+        await window.post_widget(
+            Static(f"Done — {num_runs} rounds · {elapsed_min:.0f}m · ${total_cost:.2f}{tokens}",
+                   classes="round-header")
+        )
         self.screen.app.bell()
 
-    def on_stderr(self, line):
-        self._log(f"  [bold red]SDK: {line}[/bold red]")
+    async def on_stderr(self, line):
+        pass  # Logged to dashboard.log
 
 
 class DashboardScreen(Screen):
-    CSS = """
-    DashboardScreen { layout: vertical; }
-
-    #dash-header {
-        dock: top; height: 1;
-        background: $primary; color: $text; text-style: bold; padding: 0 1;
-    }
-
-    #activity {
-        height: 1fr; min-height: 6;
-        scrollbar-size: 0 0;
-    }
-
-    #progress-panel {
-        dock: bottom; height: auto; max-height: 8;
-        border: round $primary; background: $surface; padding: 0 1;
-    }
-    #session-row { height: 3; }
-    #round-bar { width: 1fr; height: 3; }
-    #session-info { width: auto; height: 3; content-align-vertical: middle; color: $text-muted; }
-    #train-row { height: 3; display: none; }
-    #train-bar { width: 1fr; height: 3; }
-    #train-stats { width: auto; height: 3; content-align-vertical: middle; color: $text-muted; }
-    #best-row { height: 1; }
-    #best-label { width: auto; height: 1; text-style: bold; }
-    #bpb-sparkline { width: 1fr; height: 1; }
-    #bpb-sparkline > .sparkline--max-color { color: $error; }
-    #bpb-sparkline > .sparkline--min-color { color: $success; }
-
-    #results {
-        dock: bottom; height: auto; max-height: 8;
-    }
-    DataTable > .datatable--odd-row { background: $surface; }
-    """
+    CSS_PATH = "dashboard.tcss"
 
     BINDINGS = [
         ("ctrl+c", "quit_app", "Stop"),
@@ -625,40 +558,20 @@ class DashboardScreen(Screen):
         self.cfg = cfg
         self.start_time = time.time()
         self._branch = get_branch()
-        self._training_shown = False
         self._last_msg_time = time.time()
         self._thinking_dots = 0
-        self._bpb_history = []
         self._total_tokens = 0
 
     def compose(self) -> ComposeResult:
-        yield Static(id="dash-header")
-        yield RichLog(highlight=True, markup=True, id="activity")
-        with Vertical(id="progress-panel"):
-            yield Horizontal(
-                ProgressBar(total=100, show_eta=False, show_percentage=False,
-                            gradient=ROUND_GRADIENT, id="round-bar"),
-                Static("", id="session-info"),
-                id="session-row",
-            )
-            yield Horizontal(
-                ProgressBar(total=100, show_eta=False,
-                            gradient=TRAIN_GRADIENT, id="train-bar"),
-                Static("", id="train-stats"),
-                id="train-row",
-            )
-            yield Horizontal(
-                Static("", id="best-label"),
-                Sparkline([], id="bpb-sparkline"),
-                id="best-row",
-            )
+        yield Static(id="status-line")
+        yield ExperimentWindow()
+        yield Static(id="session-bar")
         yield DataTable(id="results", zebra_stripes=True)
         yield Footer()
 
     def on_mount(self) -> None:
         self._update_header()
-        self._update_session_info()
-        self._load_bpb_history()
+        self._update_session_bar()
         self.refresh_results()
         self.set_interval(1.0, self._tick)
         self.run_loop()
@@ -667,14 +580,11 @@ class DashboardScreen(Screen):
         if self.phase == "done":
             return
         self._update_header()
-        if self.phase == "training":
-            self._poll_run_log()
 
     def _update_header(self) -> None:
         effort = self.cfg.get("effort", "medium")
         elapsed = fmt_elapsed(time.time() - self.start_time)
         r = f"Round {self.round_num}/{self.num_runs}" if self.num_runs else "Starting"
-
         thinking_secs = time.time() - self._last_msg_time
         if self.phase == "experimenting" and thinking_secs > 3:
             self._thinking_dots = (self._thinking_dots % 3) + 1
@@ -688,55 +598,23 @@ class DashboardScreen(Screen):
             suffix = "  ✗ error"
         else:
             suffix = ""
-
-        self.query_one("#dash-header", Static).update(
+        self.query_one("#status-line", Static).update(
             f" {self._branch}  ·  {self.model_name}/{effort}  ·  {r}  ·  {elapsed}{suffix}"
         )
 
-    def _update_session_info(self) -> None:
+    def _update_session_bar(self) -> None:
         r = f"{self.round_num}/{self.num_runs}" if self.num_runs else "0/0"
         cost = f"${self.total_cost:.2f}"
         if self.total_cost == 0 and self.round_num > 0:
             cost += " (incl)"
         tokens = f" · {self._total_tokens // 1000}k tok" if self._total_tokens > 0 else ""
-        self.query_one("#session-info", Static).update(f"  {r} · {cost}{tokens}")
-
-    def _load_bpb_history(self) -> None:
-        try:
-            with open(RESULTS_PATH) as f:
-                lines = [l.strip() for l in f if l.strip()]
-            self._bpb_history = [
-                float(l.split("\t")[1]) for l in lines[1:]
-                if len(l.split("\t")) >= 5
-            ]
-            self._update_sparkline()
-        except Exception:
-            pass
-
-    def _update_sparkline(self) -> None:
-        if self._bpb_history:
-            self.query_one("#bpb-sparkline", Sparkline).data = self._bpb_history
-            best = min(self._bpb_history)
-            self.query_one("#best-label", Static).update(f" ★ {best:.4f} ")
-
-    def _poll_run_log(self) -> None:
-        if not os.path.exists(RUN_LOG_PATH):
-            return
-        try:
-            with open(RUN_LOG_PATH, "rb") as f:
-                f.seek(max(0, f.seek(0, 2) - 4096))
-                tail = f.read().decode("utf-8", errors="replace")
-            for seg in reversed(tail.replace("\r", "\n").split("\n")):
-                m = STEP_RE.search(seg.strip())
-                if m:
-                    pct, loss, tps, rem = float(m.group(1)), m.group(2), m.group(3), m.group(4)
-                    self.query_one("#train-bar", ProgressBar).update(total=100, progress=pct)
-                    self.query_one("#train-stats", Static).update(
-                        f"  {pct:.0f}% · loss {loss} · {tps} tok/s · {rem}s"
-                    )
-                    break
-        except Exception:
-            pass
+        if self.num_runs:
+            bw = 15
+            filled = int(bw * self.round_num / self.num_runs)
+            bar = "█" * filled + "░" * (bw - filled)
+        else:
+            bar = "░" * 15
+        self.query_one("#session-bar", Static).update(f" {bar} {r} · {cost}{tokens}")
 
     def watch_round_num(self) -> None:
         self._update_header()
@@ -812,15 +690,12 @@ class DashboardScreen(Screen):
             log.info("run_loop completed normally")
         except asyncio.CancelledError:
             log.info("run_loop cancelled")
-            try:
-                self.query_one("#activity", RichLog).write("[dim]Stopped.[/dim]")
-            except Exception:
-                pass
         except Exception as e:
             log.exception("run_loop error")
             try:
-                self.query_one("#activity", RichLog).write(
-                    f"[bold red]Fatal: {type(e).__name__}: {e}[/bold red]"
+                window = self.query_one(ExperimentWindow)
+                await window.post_widget(
+                    Static(f"Fatal: {type(e).__name__}: {e}", classes="result-discard")
                 )
             except Exception:
                 pass
