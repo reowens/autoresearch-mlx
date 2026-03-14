@@ -167,6 +167,8 @@ async def run(num_runs, reporter=None, config=None):
         env=env,
         stderr=_on_stderr,
         include_partial_messages=True,
+        max_turns=15,
+        max_budget_usd=2.00,
     )
     if api_key:
         try:
@@ -176,28 +178,24 @@ async def run(num_runs, reporter=None, config=None):
 
     reporter.on_start(num_runs, model)
 
-    async with ClaudeSDKClient(options=opts) as client:
-        for round_num in range(1, num_runs + 1):
-            elapsed = (time.time() - start) / 60
-            reporter.on_round_start(round_num, num_runs, elapsed, total_cost)
+    for round_num in range(1, num_runs + 1):
+        elapsed = (time.time() - start) / 60
+        reporter.on_round_start(round_num, num_runs, elapsed, total_cost)
 
-            prefix = f"[Round {round_num}/{num_runs}] "
-            msg = prefix + (MSG_FIRST if round_num == 1 else MSG_NEXT)
-            try:
+        prefix = f"[Round {round_num}/{num_runs}] "
+        msg = prefix + (MSG_FIRST if round_num == 1 else MSG_NEXT)
+        try:
+            # Fresh client per round — prevents context accumulation
+            async with ClaudeSDKClient(options=opts) as client:
                 await client.query(msg)
-                log.info("query sent, waiting for response")
+                log.info("Round %d: query sent", round_num)
 
                 in_tool = False
 
                 async for m in client.receive_response():
-                    mtype = type(m).__name__
-                    log.debug("msg: %s", mtype)
-
                     # StreamEvent — real-time streaming chunks
                     if isinstance(m, StreamEvent):
-                        event = getattr(m, 'event', m)
-                        if not isinstance(event, dict):
-                            continue
+                        event = m.event
                         etype = event.get("type", "")
 
                         if etype == "content_block_start":
@@ -239,14 +237,18 @@ async def run(num_runs, reporter=None, config=None):
                     elif isinstance(m, ResultMessage):
                         cost = m.total_cost_usd or 0
                         total_cost += cost
-                        reporter.on_round_done(cost, total_cost)
+                        if hasattr(m, 'subtype') and m.subtype == "error_max_turns":
+                            log.warning("Round %d hit max_turns limit", round_num)
+                            reporter.on_round_failed("hit turn limit (max_turns=15)")
+                        else:
+                            reporter.on_round_done(cost, total_cost)
                         break
 
-            except KeyboardInterrupt:
-                raise
-            except Exception as e:
-                log.exception("Round %d failed", round_num)
-                reporter.on_round_failed(f"{type(e).__name__}: {e}")
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            log.exception("Round %d failed", round_num)
+            reporter.on_round_failed(f"{type(e).__name__}: {e}")
 
     elapsed = (time.time() - start) / 60
     reporter.on_finished(num_runs, elapsed, total_cost)
