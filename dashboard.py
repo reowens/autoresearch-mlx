@@ -51,7 +51,7 @@ ROUND_GRADIENT = Gradient.from_colors("#0099cc", "#3366bb", "#663399")
 
 DEFAULTS = {
     "model": "opus",
-    "effort": "high",
+    "effort": "medium",
     "num_runs": 10,
     "branch": "",
     "api_key": "",

@@ -142,7 +142,7 @@ async def run(num_runs, reporter=None, config=None):
     total_cost = 0.0
 
     model = config.get("model", os.environ.get("MODEL", "opus"))
-    effort = config.get("effort", "high")
+    effort = config.get("effort", "medium")
     api_key = config.get("api_key") or os.environ.get("ANTHROPIC_API_KEY")
 
     env = {}
