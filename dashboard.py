@@ -358,6 +358,7 @@ from widgets.round_widget import RoundWidget
 from widgets.tool_action import ToolAction
 from widgets.training_progress import TrainingProgress
 from widgets.experiment_window import ExperimentWindow
+from widgets.thinking_indicator import ThinkingIndicator
 
 
 class DashboardReporter(LoopReporter):
@@ -366,20 +367,30 @@ class DashboardReporter(LoopReporter):
     def __init__(self, screen: "DashboardScreen"):
         self.screen = screen
         self._read_buffer = []
+        self._seen_reads = set()  # deduplicate reads within a round
         self._text_buf = ""
         self._current_round = None
         self._training_widget = None
+        self._thinking_widget = None
         self._round_summaries = []
 
     def _touch(self):
         self.screen._last_msg_time = time.time()
         self.screen._thinking_dots = 0
+        # Remove thinking indicator when activity resumes
+        if self.screen._thinking_indicator and self.screen._thinking_indicator.is_attached:
+            self.screen._thinking_indicator.remove()
+            self.screen._thinking_indicator = None
 
     async def _flush_reads(self):
         if self._read_buffer and self._current_round:
-            files = ", ".join(self._read_buffer)
-            await self._current_round.mount(ToolAction("Read", files))
+            # Deduplicate: skip files already read this round
+            new_files = [f for f in self._read_buffer if f not in self._seen_reads]
+            self._seen_reads.update(self._read_buffer)
             self._read_buffer = []
+            if new_files:
+                files = ", ".join(new_files)
+                await self._current_round.mount(ToolAction("Read", files))
 
     def _classify_line(self, line):
         """Return CSS class for a line of agent text."""
@@ -414,6 +425,8 @@ class DashboardReporter(LoopReporter):
         self.screen.total_cost = total_cost
         self.screen.phase = "experimenting"
         self._training_widget = None
+        self._thinking_widget = None
+        self._seen_reads = set()
         self._current_round = RoundWidget(round_num, num_runs)
         await self.screen.query_one(ExperimentWindow).post_widget(self._current_round)
         self.screen._update_session_bar()
@@ -469,9 +482,7 @@ class DashboardReporter(LoopReporter):
         if name == "Bash" and "experiment:" in str(label):
             desc = str(label).split("experiment:")[-1].strip().rstrip('"').rstrip("'")
             if desc:
-                await self._current_round.mount(
-                    Static(f"🧪 {desc}", classes="round-header")
-                )
+                self._current_round.set_description(desc)
         await self._current_round.mount(ToolAction(name, label))
 
     async def on_training_detected(self):
@@ -519,6 +530,10 @@ class DashboardReporter(LoopReporter):
             pass
         self.screen._update_session_bar()
         self.screen.refresh_results()
+        # Update best in header
+        results = get_results_summary()
+        if results and results["best_bpb"]:
+            self.screen._best_bpb = results["best_bpb"]
 
     async def on_round_failed(self, error):
         self._touch()
@@ -579,6 +594,9 @@ class DashboardScreen(Screen):
         self._last_msg_time = time.time()
         self._thinking_dots = 0
         self._total_tokens = 0
+        self._thinking_indicator = None
+        self._reporter = None
+        self._best_bpb = None
 
     def compose(self) -> ComposeResult:
         yield Static(id="status-line")
@@ -588,6 +606,9 @@ class DashboardScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        results = get_results_summary()
+        if results and results["best_bpb"]:
+            self._best_bpb = results["best_bpb"]
         self._update_header()
         self._update_session_bar()
         self.refresh_results()
@@ -598,6 +619,14 @@ class DashboardScreen(Screen):
         if self.phase == "done":
             return
         self._update_header()
+        # Show thinking indicator after 5s of silence
+        thinking_secs = time.time() - self._last_msg_time
+        if self.phase == "experimenting" and thinking_secs > 5 and not self._thinking_indicator:
+            indicator = ThinkingIndicator()
+            self._thinking_indicator = indicator
+            # Mount into current round if reporter has one
+            if hasattr(self, '_reporter') and self._reporter._current_round:
+                self._reporter._current_round.mount(indicator)
 
     def _update_header(self) -> None:
         effort = self.cfg.get("effort", "medium")
@@ -616,8 +645,9 @@ class DashboardScreen(Screen):
             suffix = "  ✗ error"
         else:
             suffix = ""
+        best = f"  ·  best: {self._best_bpb:.4f}" if self._best_bpb else ""
         self.query_one("#status-line", Static).update(
-            f" {self._branch}  ·  {self.model_name}/{effort}  ·  {r}  ·  {elapsed}{suffix}"
+            f" {self._branch}  ·  {self.model_name}/{effort}  ·  {r}  ·  {elapsed}{best}{suffix}"
         )
 
     def _update_session_bar(self) -> None:
@@ -715,6 +745,7 @@ class DashboardScreen(Screen):
     async def run_loop(self) -> None:
         log = logging.getLogger("dashboard.run_loop")
         reporter = DashboardReporter(self)
+        self._reporter = reporter
         log.info("run_loop started, num_runs=%s", self.cfg.get("num_runs"))
         try:
             await run(self.cfg.get("num_runs", 10), reporter=reporter, config=self.cfg)

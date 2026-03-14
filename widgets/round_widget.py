@@ -21,6 +21,15 @@ class RoundWidget(VerticalGroup):
             id="round-title",
         )
 
+    def set_description(self, desc: str) -> None:
+        """Update header with experiment description."""
+        try:
+            self.query_one("#round-title", Static).update(
+                f"── Round {self.round_num}/{self.num_runs} ── 🧪 {desc}"
+            )
+        except Exception:
+            pass
+
     def set_result(self, bpb: float, status: str, delta_str: str) -> None:
         """Update header with result and set border color."""
         icon = "✓" if status == "keep" else "✗"
