@@ -605,6 +605,8 @@ smooth_train_loss = 0.0
 total_training_time = 0.0
 step = 0
 t_compiled = None
+swa_params = None
+swa_count = 0
 
 while True:
     t0 = time.time()
@@ -635,6 +637,21 @@ while True:
     optimizer.update(model, accum_grads, muon_momentum=muon_momentum, muon_weight_decay=muon_weight_decay)
     mx.eval(model.parameters(), *optimizer.state)
     compile_state[0] = model.state  # refresh for next compiled call
+
+    # SWA: average model weights during warmdown phase only
+    if progress > (1.0 - WARMDOWN_RATIO):
+        flat = tree_flatten(model.parameters())
+        if swa_params is None:
+            swa_params = {k: v.astype(mx.float32) for k, v in flat}
+            swa_count = 1
+            mx.eval(*swa_params.values())
+        else:
+            swa_count += 1
+            new_swa = {}
+            for k, v in flat:
+                new_swa[k] = swa_params[k] + (v.astype(mx.float32) - swa_params[k]) / swa_count
+            mx.eval(*new_swa.values())
+            swa_params = new_swa
 
     train_loss_f = float(train_loss.item())
 
@@ -688,6 +705,13 @@ t_train = time.time()
 print(f"Training completed in {t_train - t_compiled:.1f}s")
 
 total_tokens = step * TOTAL_BATCH_SIZE
+
+# Apply SWA averaged weights before eval
+if swa_params is not None:
+    print(f"Applying SWA average ({swa_count} snapshots from warmdown phase)")
+    for path, param in swa_params.items():
+        optimizer._set_path_value(model, path, param.astype(mx.bfloat16))
+    mx.eval(model.parameters())
 
 # Save checkpoint before eval so training isn't lost if eval OOMs
 mx.savez("checkpoint.npz", **dict(tree_flatten(model.parameters())))
