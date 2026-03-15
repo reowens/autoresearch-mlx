@@ -95,3 +95,4 @@ c9457ea	1.456648	21.2	discard	residual dropout 0.05 (much worse 1.457 vs 1.311; 
 490cdb6	1.421442	21.2	discard	WARMDOWN_RATIO 0.65 (full-LR for only 3.5min + long 6.5min cooldown; much worse 1.421 vs 1.311)
 b620e8d	1.443647	21.2	discard	depth 8 at 10min (ASPECT_RATIO=32; model_dim=256 same GQA; much worse 1.444 vs 1.311; 453 steps not enough for deeper model)
 755730d	1.516021	21.2	discard	cosine LR with warm restart (2 cycles; 2nd at 0.5x max LR; much worse 1.516 vs 1.311; restart disrupts learned representations)
+c065579	1.429942	21.2	discard	Muon beta2 0.95->0.99 (smoother NorMuon variance; much worse 1.430 vs 1.311; too slow to adapt in 556 steps)
