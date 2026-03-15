@@ -577,11 +577,6 @@ def compiled_fwd_bwd(x, y):
 print(f"Time budget: {TIME_BUDGET}s")
 print(f"Gradient accumulation steps: {grad_accum_steps}")
 
-# EMA of model weights for smoother evaluation
-EMA_DECAY = 0.995
-ema_params = tree_map(lambda p: mx.array(p), model.parameters())
-mx.eval(tree_flatten(ema_params))
-
 smooth_train_loss = 0.0
 total_training_time = 0.0
 step = 0
@@ -616,13 +611,6 @@ while True:
     optimizer.update(model, accum_grads, muon_momentum=muon_momentum, muon_weight_decay=muon_weight_decay)
     mx.eval(model.parameters(), *optimizer.state)
     compile_state[0] = model.state  # refresh for next compiled call
-
-    # Update EMA weights
-    ema_params = tree_map(
-        lambda e, p: EMA_DECAY * e + (1 - EMA_DECAY) * p.astype(e.dtype),
-        ema_params, model.parameters(),
-    )
-    mx.eval(tree_flatten(ema_params))
 
     train_loss_f = float(train_loss.item())
 
@@ -666,12 +654,6 @@ t_train = time.time()
 print(f"Training completed in {t_train - t_compiled:.1f}s")
 
 total_tokens = step * TOTAL_BATCH_SIZE
-
-# Swap in EMA weights for evaluation
-print("Swapping in EMA weights for eval...")
-model.load_weights(tree_flatten(ema_params))
-mx.eval(model.parameters())
-
 print("Starting final eval...")
 print(f"Final eval batch size: {FINAL_EVAL_BATCH_SIZE}")
 val_bpb = evaluate_bpb(model, tokenizer, FINAL_EVAL_BATCH_SIZE)
