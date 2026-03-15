@@ -92,3 +92,4 @@ ee345ec	1.448732	21.2	discard	halve SCALAR_LR 0.5->0.25 (much worse; residual sc
 c24f934	1.426836	21.2	discard	partial RoPE (rotate only 32/64 head dims; much worse; full rotary essential)
 dce09b6	1.412310	21.2	discard	halve batch size (DEVICE_BATCH_SIZE=4 TOTAL_BATCH_SIZE=2^13; noisier grads hurt more than extra updates help)
 c9457ea	1.456648	21.2	discard	residual dropout 0.05 (much worse 1.457 vs 1.311; dropout noise prevents convergence in ~500 steps)
+490cdb6	1.421442	21.2	discard	WARMDOWN_RATIO 0.65 (full-LR for only 3.5min + long 6.5min cooldown; much worse 1.421 vs 1.311)
