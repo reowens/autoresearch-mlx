@@ -187,24 +187,24 @@ class GPT(nn.Module):
         n_embd = self.config.n_embd
         scale = 3**0.5 * n_embd**-0.5
 
-        self.wte.weight = (mx.random.normal(self.wte.weight.shape) * 1.0).astype(mx.bfloat16)
-        self.lm_head.weight = (mx.random.normal(self.lm_head.weight.shape) * 0.001).astype(mx.bfloat16)
+        self.wte.weight = (mx.random.normal(self.wte.weight.shape) * 1.0).astype(mx.float16)
+        self.lm_head.weight = (mx.random.normal(self.lm_head.weight.shape) * 0.001).astype(mx.float16)
 
         for block in self.blocks:
-            block.attn.c_q.weight = mx.random.uniform(-scale, scale, block.attn.c_q.weight.shape).astype(mx.bfloat16)
-            block.attn.c_k.weight = mx.random.uniform(-scale, scale, block.attn.c_k.weight.shape).astype(mx.bfloat16)
-            block.attn.c_v.weight = mx.random.uniform(-scale, scale, block.attn.c_v.weight.shape).astype(mx.bfloat16)
-            block.attn.c_proj.weight = mx.zeros_like(block.attn.c_proj.weight).astype(mx.bfloat16)
-            block.mlp.c_fc.weight = mx.random.uniform(-scale, scale, block.mlp.c_fc.weight.shape).astype(mx.bfloat16)
-            block.mlp.c_proj.weight = mx.zeros_like(block.mlp.c_proj.weight).astype(mx.bfloat16)
+            block.attn.c_q.weight = mx.random.uniform(-scale, scale, block.attn.c_q.weight.shape).astype(mx.float16)
+            block.attn.c_k.weight = mx.random.uniform(-scale, scale, block.attn.c_k.weight.shape).astype(mx.float16)
+            block.attn.c_v.weight = mx.random.uniform(-scale, scale, block.attn.c_v.weight.shape).astype(mx.float16)
+            block.attn.c_proj.weight = mx.zeros_like(block.attn.c_proj.weight).astype(mx.float16)
+            block.mlp.c_fc.weight = mx.random.uniform(-scale, scale, block.mlp.c_fc.weight.shape).astype(mx.float16)
+            block.mlp.c_proj.weight = mx.zeros_like(block.mlp.c_proj.weight).astype(mx.float16)
             if block.attn.ve_gate is not None:
-                block.attn.ve_gate.weight = mx.zeros_like(block.attn.ve_gate.weight).astype(mx.bfloat16)
+                block.attn.ve_gate.weight = mx.zeros_like(block.attn.ve_gate.weight).astype(mx.float16)
 
         self.resid_lambdas = mx.ones((self.config.n_layer,), dtype=mx.float32)
         self.x0_lambdas = mx.full((self.config.n_layer,), 0.05, dtype=mx.float32)
 
         for ve in self.value_embeds.values():
-            ve.weight = mx.random.uniform(-scale, scale, ve.weight.shape).astype(mx.bfloat16)
+            ve.weight = mx.random.uniform(-scale, scale, ve.weight.shape).astype(mx.float16)
 
     def _compute_window_sizes(self, config):
         pattern = config.window_pattern.upper()
