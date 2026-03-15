@@ -297,7 +297,7 @@ class MuonAdamW:
                         "lr": matrix_lr,
                         "momentum": 0.95,
                         "ns_steps": 5,
-                        "beta2": 0.95,
+                        "beta2": 0.99,
                         "weight_decay": weight_decay,
                     }
                 self.muon_groups[shape]["paths"].append(path)
