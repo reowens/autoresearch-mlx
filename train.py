@@ -432,9 +432,8 @@ class MuonAdamW:
         final_scale = step_size * (v_norm / mx.maximum(v_norm_new, 1e-10))
         g = g_f32 * final_scale
 
-        # --- Cautious weight decay + parameter update ---
-        mask = (g * stacked_params) >= 0
-        stacked_params = stacked_params - lr * g - lr * muon_weight_decay * stacked_params * mask
+        # --- Standard decoupled weight decay + parameter update ---
+        stacked_params = stacked_params * (1 - lr * muon_weight_decay) - lr * g
 
         return stacked_params
 
