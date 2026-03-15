@@ -104,3 +104,4 @@ dd2140b	1.432561	21.2	discard	centered norm (LayerNorm-style mean subtraction; m
 dd05a8f	1.422229	21.2	discard	all-sliding-window (WINDOW_PATTERN=S; only last layer full attention; 1.422 vs 1.311)
 bea8bc8	1.403716	21.2	discard	sub-LN sandwich norm (norm after each sub-layer output; 1.404 vs 1.311 baseline)
 cad8945	1.356563	21.2	discard	sqrt warmdown schedule (cooldown^0.5 keeps LR higher longer; 1.357 vs 1.311 baseline)
+08f090f	1.311322	21.2	discard	bookend attention (LSSSS window; full attn at first+last layer; 1.311 vs 1.311 baseline)
