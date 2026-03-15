@@ -241,22 +241,33 @@ async def run(num_runs, reporter=None, config=None):
         await reporter.on_round_start(0, num_runs, 0, 0)
         await reporter.on_text("Running baseline (no agent — mechanical re-verification)...")
         await reporter.on_training_detected()
-        result = subprocess.run(
-            ["uv", "run", "train.py"],
-            cwd=DIR, capture_output=True, text=True,
-            env={**os.environ, "TIME_BUDGET": str(time_budget_sec)},
-            timeout=time_budget_sec + 300,
-        )
-        # Extract val_bpb from output
-        for line in result.stdout.splitlines():
-            if line.startswith("val_bpb:"):
-                val_bpb = line.split()[-1].strip()
-                await reporter.on_text(f"Baseline val_bpb: {val_bpb}")
-                log.info("Baseline val_bpb: %s", val_bpb)
-                break
-        else:
-            await reporter.on_text("Baseline failed — check run.log")
-            log.error("Baseline: no val_bpb in output")
+
+        # Use async subprocess to avoid blocking the event loop (freezes TUI)
+        train_env = {**os.environ, "TIME_BUDGET": str(time_budget_sec)}
+        log_path = os.path.join(DIR, FW["log_file"])
+        with open(log_path, "w") as log_f:
+            proc = await asyncio.create_subprocess_exec(
+                "uv", "run", "train.py",
+                cwd=DIR, stdout=log_f, stderr=asyncio.subprocess.STDOUT,
+                env=train_env,
+            )
+            await proc.wait()
+
+        # Extract val_bpb from log
+        try:
+            with open(log_path) as f:
+                for line in f:
+                    if line.startswith("val_bpb:"):
+                        val_bpb = line.split()[-1].strip()
+                        await reporter.on_text(f"Baseline val_bpb: {val_bpb}")
+                        log.info("Baseline val_bpb: %s", val_bpb)
+                        break
+                else:
+                    await reporter.on_text("Baseline failed — check run.log")
+                    log.error("Baseline: no val_bpb in output")
+        except FileNotFoundError:
+            await reporter.on_text("Baseline failed — no run.log")
+            log.error("Baseline: run.log not found")
         await reporter.on_round_done(0, 0)
 
     for round_num in range(1, num_runs + 1):
