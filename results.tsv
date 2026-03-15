@@ -85,3 +85,4 @@ b8c77dd	1.400399	21.2	discard	x0_init 0.15 (increase x0 skip from 0.1 to 0.15; t
 e7e2cc5	1.334776	21.2	discard	increase weight decay 0.2->0.25 (stronger regularization hurts; 1.335 vs 1.277)
 f7a7b3d	1.310847	21.2	keep	baseline re-verify at 10min budget (mechanical run, best config + infra fixes)
 c715df7	1.385528	21.1	discard	shared VE embedding (single table across all VE layers; 1.386 vs 1.311 baseline)
+c8a7d25	1.314580	20.7	discard	reduce MLP expansion 4x to 3x (21% more tokens but capacity loss; 1.315 vs 1.311)
