@@ -115,7 +115,6 @@ class CausalSelfAttention(nn.Module):
             else None
         )
         self.rope = nn.RoPE(self.head_dim, traditional=True, base=10000)
-        self.head_scale = mx.ones((self.n_head,), dtype=mx.float32)
 
     def __call__(self, x, ve, mask):
         batch_size, seq_len, _ = x.shape
@@ -134,8 +133,6 @@ class CausalSelfAttention(nn.Module):
 
         q = norm(self.rope(q))
         k = norm(self.rope(k))
-        # Per-head learnable temperature: scale query vectors to control attention sharpness
-        q = q * self.head_scale.reshape(1, self.n_head, 1, 1)
 
         scale = 1.0 / math.sqrt(self.head_dim)
         y = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)

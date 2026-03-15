@@ -99,3 +99,4 @@ c065579	1.429942	21.2	discard	Muon beta2 0.95->0.99 (smoother NorMuon variance; 
 a000c1e	1.431694	21.2	discard	Muon initial momentum 0.90 (from 0.85; much worse 1.432 vs 1.311; higher start momentum destabilizes early training)
 f1ba6b5	1.429988	21.2	discard	logit soft-cap 20 (from 15; too loose; much worse 1.430 vs 1.311)
 dd2140b	1.432561	21.2	discard	centered norm (LayerNorm-style mean subtraction; much worse 1.433 vs 1.311; DC component needed)
+8a7b0bb	1.431247	21.2	discard	learnable per-head attention temperature (scale q after QK-norm; much worse 1.431 vs 1.311; destabilizes attention)
