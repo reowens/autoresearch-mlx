@@ -499,10 +499,6 @@ DEVICE_BATCH_SIZE = 8
 FINAL_EVAL_BATCH_SIZE = 256
 STARTUP_EXCLUDE_STEPS = 10
 
-# Sequence length curriculum: train on shorter seqs first for faster steps
-SHORT_SEQ_LEN = 1024
-CURRICULUM_SWITCH = 0.5  # switch from short to long at 50% training time
-
 
 def get_lr_multiplier(progress):
     if progress < WARMUP_RATIO:
@@ -529,10 +525,7 @@ mx.random.seed(42)
 
 tokenizer = Tokenizer.from_directory()
 vocab_size = tokenizer.get_vocab_size()
-train_loader_short = make_dataloader(tokenizer, DEVICE_BATCH_SIZE, SHORT_SEQ_LEN, "train")
-train_loader_long = make_dataloader(tokenizer, DEVICE_BATCH_SIZE, MAX_SEQ_LEN, "train")
-use_short = True
-train_loader = train_loader_short
+train_loader = make_dataloader(tokenizer, DEVICE_BATCH_SIZE, MAX_SEQ_LEN, "train")
 x, y, epoch = next(train_loader)
 t_data = time.time()
 print(f"Data/tokenizer loaded in {t_data - t_start:.1f}s")
@@ -558,13 +551,9 @@ chip_name, gpu_cores = get_apple_silicon_info()
 peak_flops = estimate_peak_flops(chip_name, gpu_cores)
 print(f"Hardware: {chip_name} ({gpu_cores} GPU cores, {peak_flops/1e12:.1f} TFLOPS peak)")
 
-tokens_per_fwdbwd_short = DEVICE_BATCH_SIZE * SHORT_SEQ_LEN
-tokens_per_fwdbwd_long = DEVICE_BATCH_SIZE * MAX_SEQ_LEN
-assert TOTAL_BATCH_SIZE % tokens_per_fwdbwd_short == 0
-assert TOTAL_BATCH_SIZE % tokens_per_fwdbwd_long == 0
-grad_accum_steps_short = TOTAL_BATCH_SIZE // tokens_per_fwdbwd_short
-grad_accum_steps_long = TOTAL_BATCH_SIZE // tokens_per_fwdbwd_long
-grad_accum_steps = grad_accum_steps_short
+tokens_per_fwdbwd = DEVICE_BATCH_SIZE * MAX_SEQ_LEN
+assert TOTAL_BATCH_SIZE % tokens_per_fwdbwd == 0
+grad_accum_steps = TOTAL_BATCH_SIZE // tokens_per_fwdbwd
 
 optimizer = MuonAdamW(
     model,
@@ -586,8 +575,7 @@ def compiled_fwd_bwd(x, y):
     return loss_grad_fn(model, x, y)
 
 print(f"Time budget: {TIME_BUDGET}s")
-print(f"Gradient accumulation steps: short={grad_accum_steps_short}, long={grad_accum_steps_long}")
-print(f"Curriculum: {SHORT_SEQ_LEN} → {MAX_SEQ_LEN} at {CURRICULUM_SWITCH:.0%} progress")
+print(f"Gradient accumulation steps: {grad_accum_steps}")
 
 smooth_train_loss = 0.0
 total_training_time = 0.0
@@ -616,13 +604,6 @@ while True:
         accum_grads = tree_map(lambda grad: grad * (1.0 / grad_accum_steps), accum_grads)
 
     progress = min(total_training_time / TIME_BUDGET, 1.0)
-
-    # Curriculum switch: short → long sequences
-    if use_short and progress >= CURRICULUM_SWITCH:
-        use_short = False
-        train_loader = train_loader_long
-        grad_accum_steps = grad_accum_steps_long
-
     lrm = get_lr_multiplier(progress)
     muon_momentum = get_muon_momentum(step)
     muon_weight_decay = get_weight_decay(progress)
