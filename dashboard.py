@@ -750,12 +750,22 @@ class DashboardScreen(Screen):
     def action_do_refresh(self) -> None:
         self.refresh_results()
 
+    def _restore_best(self) -> None:
+        """Restore train.py from the golden 'best' tag."""
+        result = subprocess.run(
+            ["git", "checkout", "best", "--", "train.py"],
+            cwd=DIR, capture_output=True,
+        )
+        if result.returncode != 0:
+            # Fallback to HEAD if no best tag
+            subprocess.run(["git", "checkout", "--", "train.py"], cwd=DIR, capture_output=True)
+
     def action_quit_app(self) -> None:
         now = time.time()
         if now - self._last_ctrl_c < 3.0:
             # Second press — force quit + clean up
             self.workers.cancel_all()
-            subprocess.run(["git", "checkout", "--", "train.py"], cwd=DIR, capture_output=True)
+            self._restore_best()
             self.app.exit()
         else:
             # First press — request graceful stop
@@ -765,7 +775,7 @@ class DashboardScreen(Screen):
 
     def action_restart(self) -> None:
         self.workers.cancel_all()
-        subprocess.run(["git", "checkout", "--", "train.py"], cwd=DIR, capture_output=True)
+        self._restore_best()
         self.app.switch_screen(QuickLaunchScreen(self.cfg))
 
     @work(exclusive=True)

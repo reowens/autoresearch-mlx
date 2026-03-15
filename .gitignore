@@ -38,7 +38,7 @@ docs/
 # Persisted config
 .autoresearch.json
 flywheel.json
-suggestions.md
+# suggestions.md — tracked (experiment queue for the agent)
 
 # Dashboard log
 dashboard.log
