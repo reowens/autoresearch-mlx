@@ -172,6 +172,7 @@ class GPT(nn.Module):
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.blocks = [Block(config, i) for i in range(config.n_layer)]
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.lm_head_2 = nn.Linear(config.n_embd, config.vocab_size, bias=False)  # 2nd-next token prediction
         self.resid_lambdas = mx.ones((config.n_layer,), dtype=mx.float32)
         self.x0_lambdas = mx.zeros((config.n_layer,), dtype=mx.float32)
         head_dim = config.n_embd // config.n_head
@@ -189,6 +190,7 @@ class GPT(nn.Module):
 
         self.wte.weight = (mx.random.normal(self.wte.weight.shape) * 1.0).astype(mx.bfloat16)
         self.lm_head.weight = (mx.random.normal(self.lm_head.weight.shape) * 0.001).astype(mx.bfloat16)
+        self.lm_head_2.weight = (mx.random.normal(self.lm_head_2.weight.shape) * 0.001).astype(mx.bfloat16)
 
         for block in self.blocks:
             block.attn.c_q.weight = mx.random.uniform(-scale, scale, block.attn.c_q.weight.shape).astype(mx.bfloat16)
@@ -256,7 +258,19 @@ class GPT(nn.Module):
         if reduction == "none":
             return ce
         denom = mx.maximum(mx.sum(valid), 1)
-        return mx.sum(ce) / denom
+        main_loss = mx.sum(ce) / denom
+
+        # Auxiliary: predict 2nd-next token from positions 0..T-2
+        logits_2 = self.lm_head_2(x[:, :-1, :]).astype(mx.float32)
+        logits_2 = 15.0 * mx.tanh(logits_2 / 15.0)
+        targets_2 = targets[:, 1:]
+        valid_2 = targets_2 != -1
+        targets_2_safe = mx.where(valid_2, targets_2, mx.zeros_like(targets_2))
+        ce_2 = nn.losses.cross_entropy(logits_2, targets_2_safe, reduction="none")
+        ce_2 = ce_2 * valid_2
+        aux_loss = mx.sum(ce_2) / mx.maximum(mx.sum(valid_2), 1)
+
+        return main_loss + 0.3 * aux_loss
 
 
 # ---------------------------------------------------------------------------
