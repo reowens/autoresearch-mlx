@@ -159,8 +159,8 @@ class Block(nn.Module):
         self.mlp = MLP(config)
 
     def __call__(self, x, ve, mask):
-        x = x + norm(self.attn(norm(x), ve, mask))
-        x = x + norm(self.mlp(norm(x)))
+        x = x + self.attn(norm(x), ve, mask)
+        x = x + self.mlp(norm(x))
         return x
 
 
