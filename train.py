@@ -157,10 +157,12 @@ class Block(nn.Module):
         super().__init__()
         self.attn = CausalSelfAttention(config, layer_idx)
         self.mlp = MLP(config)
+        self.ln1 = nn.RMSNorm(config.n_embd)
+        self.ln2 = nn.RMSNorm(config.n_embd)
 
     def __call__(self, x, ve, mask):
-        x = x + self.attn(norm(x), ve, mask)
-        x = x + self.mlp(norm(x))
+        x = x + self.attn(self.ln1(x), ve, mask)
+        x = x + self.mlp(self.ln2(x))
         return x
 
 
@@ -172,6 +174,7 @@ class GPT(nn.Module):
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.blocks = [Block(config, i) for i in range(config.n_layer)]
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.ln_final = nn.RMSNorm(config.n_embd)
         self.resid_lambdas = mx.full((config.n_layer,), 1.5, dtype=mx.float32)
         self.x0_lambdas = mx.zeros((config.n_layer,), dtype=mx.float32)
         head_dim = config.n_embd // config.n_head
@@ -241,7 +244,7 @@ class GPT(nn.Module):
             x = mx.sigmoid(self.resid_lambdas[i]) * x + self.x0_lambdas[i] * x0
             ve = self.value_embeds[str(i)](idx) if str(i) in self.value_embeds else None
             x = block(x, ve, masks[i])
-        x = norm(x)
+        x = self.ln_final(x)
 
         logits = self.lm_head(x).astype(mx.float32)
         logits = 15.0 * mx.tanh(logits / 15.0)
