@@ -78,3 +78,4 @@ b8c77dd	1.400399	21.2	discard	x0_init 0.15 (increase x0 skip from 0.1 to 0.15; t
 4cf3a8e	1.413052	21.2	discard	increase Muon target momentum 0.95->0.97 (destabilizes training)
 270800d	1.410547	21.2	discard	remove NorMuon variance reduction (much worse; variance normalization essential)
 758caa2	1.406190	21.2	discard	remove cautious weight decay mask in Muon (standard decoupled WD; much worse)
+0b50394	1.437584	21.2	discard	deep supervision with aux loss from mid-layer (layer 3/6 weight 0.1; much worse)

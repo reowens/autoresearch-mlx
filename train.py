@@ -237,14 +237,10 @@ class GPT(nn.Module):
         x = self.wte(idx)
         x = norm(x)
         x0 = x
-        aux_mid = None
-        mid_layer = self.config.n_layer // 2  # layer 3 of 6
         for i, block in enumerate(self.blocks):
             x = self.resid_lambdas[i] * x + self.x0_lambdas[i] * x0
             ve = self.value_embeds[str(i)](idx) if str(i) in self.value_embeds else None
             x = block(x, ve, masks[i])
-            if i == mid_layer - 1 and targets is not None:
-                aux_mid = norm(x)
         x = norm(x)
 
         logits = self.lm_head(x).astype(mx.float32)
@@ -257,21 +253,10 @@ class GPT(nn.Module):
         targets_safe = mx.where(valid, targets, mx.zeros_like(targets))
         ce = nn.losses.cross_entropy(logits, targets_safe, reduction="none")
         ce = ce * valid
-        denom = mx.maximum(mx.sum(valid), 1)
-        main_loss = mx.sum(ce) / denom
-
-        # Deep supervision: auxiliary loss from mid-layer
-        if aux_mid is not None:
-            aux_logits = self.lm_head(aux_mid).astype(mx.float32)
-            aux_logits = 15.0 * mx.tanh(aux_logits / 15.0)
-            aux_ce = nn.losses.cross_entropy(aux_logits, targets_safe, reduction="none")
-            aux_ce = aux_ce * valid
-            aux_loss = mx.sum(aux_ce) / denom
-            main_loss = main_loss + 0.1 * aux_loss
-
         if reduction == "none":
             return ce
-        return main_loss
+        denom = mx.maximum(mx.sum(valid), 1)
+        return mx.sum(ce) / denom
 
 
 # ---------------------------------------------------------------------------
