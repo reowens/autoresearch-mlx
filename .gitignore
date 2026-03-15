@@ -38,6 +38,7 @@ docs/
 # Persisted config
 .autoresearch.json
 flywheel.json
+suggestions.md
 
 # Dashboard log
 dashboard.log

@@ -70,6 +70,7 @@ _DEFAULT_MSG_FIRST = (
     "Read results.tsv, train.py, and prepare.py. "
     "BEFORE proposing an experiment, check results.tsv carefully — do NOT repeat "
     "or closely re-test anything already tried. Find something genuinely new. "
+    "If suggestions.md exists, read it for ideas — but still check results.tsv first. "
     "Run exactly ONE experiment: modify train.py, commit, train, evaluate, "
     "update results.tsv, keep or discard. "
     "IMPORTANT: ONE training run only. If it crashes or diverges, log it and STOP. "
@@ -77,7 +78,8 @@ _DEFAULT_MSG_FIRST = (
 )
 _DEFAULT_MSG_NEXT = (
     "Check results.tsv for what's been tried. Find something NEW — do not repeat "
-    "or closely re-test previous experiments. Run exactly ONE more experiment, then stop. "
+    "or closely re-test previous experiments. If suggestions.md exists, check it for ideas. "
+    "Run exactly ONE more experiment, then stop. "
     "If it crashes or diverges, log it and stop."
 )
 
