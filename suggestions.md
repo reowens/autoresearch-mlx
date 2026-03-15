@@ -1,12 +1,6 @@
 # Experiment Queue
 
-## FIRST: Re-baseline (MANDATORY)
-
-Do NOT skip this. Run `train.py` AS-IS with NO modifications. We need a fresh val_bpb number to confirm the 1.277 score is still valid. Commit as "baseline: re-verify best config", run training, log the result. Do NOT propose or analyze experiments until this run is complete.
-
-## Then: Suggested experiments (from upstream discussion-43)
-
-Test **one per run**, in this order:
+Test **one per run**, in this order. Skip any that already appear in results.tsv.
 
 1. **Init scale 0.68**: Multiply the transformer weight init scale by 0.68 (i.e. `scale = 3**0.5 * n_embd**-0.5 * 0.68`). Narrow optimum — 0.66 and 0.70 both tested worse upstream.
 2. **x0_init 0.05**: Reduce x0 skip scalar init from 0.1 to 0.05 (in `init_weights`, change `mx.full(..., 0.1, ...)` to 0.05).

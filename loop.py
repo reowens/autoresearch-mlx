@@ -233,6 +233,32 @@ async def run(num_runs, reporter=None, config=None):
     await reporter.on_start(num_runs, model)
     log.info("Config: model=%s effort=%s time_budget=%dm", model, effort, time_budget_min)
 
+    # Run baseline mechanically if requested (no agent, just run train.py as-is)
+    # Triggered by --baseline flag or config key
+    if config.get("baseline_first") or os.environ.get("BASELINE_FIRST"):
+        subprocess.run(["git", "checkout", "best", "--", "train.py"], cwd=DIR, capture_output=True)
+        log.info("Baseline: restored train.py from 'best' tag, running training...")
+        await reporter.on_round_start(0, num_runs, 0, 0)
+        await reporter.on_text("Running baseline (no agent — mechanical re-verification)...")
+        await reporter.on_training_detected()
+        result = subprocess.run(
+            ["uv", "run", "train.py"],
+            cwd=DIR, capture_output=True, text=True,
+            env={**os.environ, "TIME_BUDGET": str(time_budget_sec)},
+            timeout=time_budget_sec + 300,
+        )
+        # Extract val_bpb from output
+        for line in result.stdout.splitlines():
+            if line.startswith("val_bpb:"):
+                val_bpb = line.split()[-1].strip()
+                await reporter.on_text(f"Baseline val_bpb: {val_bpb}")
+                log.info("Baseline val_bpb: %s", val_bpb)
+                break
+        else:
+            await reporter.on_text("Baseline failed — check run.log")
+            log.error("Baseline: no val_bpb in output")
+        await reporter.on_round_done(0, 0)
+
     for round_num in range(1, num_runs + 1):
         if hasattr(reporter, 'stop_requested') and reporter.stop_requested:
             log.info("Graceful stop requested after round %d", round_num - 1)
