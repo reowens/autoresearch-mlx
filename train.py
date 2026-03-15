@@ -172,7 +172,6 @@ class GPT(nn.Module):
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.blocks = [Block(config, i) for i in range(config.n_layer)]
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        self.resid_lambdas = mx.ones((config.n_layer,), dtype=mx.float32)
         self.x0_lambdas = mx.zeros((config.n_layer,), dtype=mx.float32)
         head_dim = config.n_embd // config.n_head
         kv_dim = config.n_kv_head * head_dim
@@ -200,7 +199,6 @@ class GPT(nn.Module):
             if block.attn.ve_gate is not None:
                 block.attn.ve_gate.weight = mx.zeros_like(block.attn.ve_gate.weight).astype(mx.bfloat16)
 
-        self.resid_lambdas = mx.ones((self.config.n_layer,), dtype=mx.float32)
         self.x0_lambdas = mx.full((self.config.n_layer,), 0.1, dtype=mx.float32)
 
         for ve in self.value_embeds.values():
@@ -238,7 +236,7 @@ class GPT(nn.Module):
         x = norm(x)
         x0 = x
         for i, block in enumerate(self.blocks):
-            x = self.resid_lambdas[i] * x + self.x0_lambdas[i] * x0
+            x = x + self.x0_lambdas[i] * x0
             ve = self.value_embeds[str(i)](idx) if str(i) in self.value_embeds else None
             x = block(x, ve, masks[i])
         x = norm(x)
@@ -307,8 +305,6 @@ class MuonAdamW:
                     lr, wd, betas = embedding_lr * dmodel_lr_scale, 0.0, adam_betas
                 elif "lm_head" in path:
                     lr, wd, betas = unembedding_lr * dmodel_lr_scale, 0.0, adam_betas
-                elif "resid_lambdas" in path:
-                    lr, wd, betas = scalar_lr * 0.01, 0.0, adam_betas
                 elif "x0_lambdas" in path:
                     lr, wd, betas = scalar_lr, 0.0, (0.96, 0.95)
                 else:
