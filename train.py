@@ -20,6 +20,9 @@ TIME_BUDGET = int(os.environ.get("TIME_BUDGET", TIME_BUDGET))
 
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
+# Training/eval flag for dropout (compiled path always uses True; eval calls model directly)
+_TRAINING = True
+
 
 @dataclass
 class GPTConfig:
@@ -159,8 +162,16 @@ class Block(nn.Module):
         self.mlp = MLP(config)
 
     def __call__(self, x, ve, mask):
-        x = x + self.attn(norm(x), ve, mask)
-        x = x + self.mlp(norm(x))
+        attn_out = self.attn(norm(x), ve, mask)
+        if _TRAINING and RESIDUAL_DROPOUT > 0:
+            keep = (mx.random.uniform(shape=attn_out.shape) >= RESIDUAL_DROPOUT).astype(attn_out.dtype)
+            attn_out = attn_out * keep / (1 - RESIDUAL_DROPOUT)
+        x = x + attn_out
+        mlp_out = self.mlp(norm(x))
+        if _TRAINING and RESIDUAL_DROPOUT > 0:
+            keep = (mx.random.uniform(shape=mlp_out.shape) >= RESIDUAL_DROPOUT).astype(mlp_out.dtype)
+            mlp_out = mlp_out * keep / (1 - RESIDUAL_DROPOUT)
+        x = x + mlp_out
         return x
 
 
@@ -492,6 +503,7 @@ ADAM_BETAS = (0.8, 0.95)
 WARMUP_RATIO = 0.0
 WARMDOWN_RATIO = 0.3
 FINAL_LR_FRAC = 0.0
+RESIDUAL_DROPOUT = 0.05
 
 # Model size
 DEPTH = 6
@@ -692,6 +704,8 @@ total_tokens = step * TOTAL_BATCH_SIZE
 # Save checkpoint before eval so training isn't lost if eval OOMs
 mx.savez("checkpoint.npz", **dict(tree_flatten(model.parameters())))
 
+# Disable dropout for evaluation
+_TRAINING = False
 print("Starting final eval...")
 print(f"Final eval batch size: {FINAL_EVAL_BATCH_SIZE}")
 val_bpb = evaluate_bpb(model, tokenizer, FINAL_EVAL_BATCH_SIZE)
