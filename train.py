@@ -33,6 +33,8 @@ class GPTConfig:
 
 
 def norm(x):
+    mean = mx.mean(x, axis=-1, keepdims=True)
+    x = x - mean
     return x * mx.rsqrt(mx.mean(x * x, axis=-1, keepdims=True) + 1e-5)
 
 
