@@ -174,6 +174,7 @@ class GPT(nn.Module):
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.resid_lambdas = mx.full((config.n_layer,), 1.5, dtype=mx.float32)
         self.x0_lambdas = mx.zeros((config.n_layer,), dtype=mx.float32)
+        self.skip_lambdas = mx.zeros((config.n_layer // 2,), dtype=mx.float32)
         head_dim = config.n_embd // config.n_head
         kv_dim = config.n_kv_head * head_dim
         self.value_embeds = {
@@ -202,6 +203,7 @@ class GPT(nn.Module):
 
         self.resid_lambdas = mx.full((self.config.n_layer,), 1.5, dtype=mx.float32)
         self.x0_lambdas = mx.full((self.config.n_layer,), 0.1, dtype=mx.float32)
+        self.skip_lambdas = mx.zeros((self.config.n_layer // 2,), dtype=mx.float32)
 
         for ve in self.value_embeds.values():
             ve.weight = mx.random.uniform(-scale, scale, ve.weight.shape).astype(mx.bfloat16)
@@ -237,8 +239,15 @@ class GPT(nn.Module):
         x = self.wte(idx)
         x = norm(x)
         x0 = x
+        half = self.config.n_layer // 2
+        intermediates = []
         for i, block in enumerate(self.blocks):
             x = mx.sigmoid(self.resid_lambdas[i]) * x + self.x0_lambdas[i] * x0
+            if i < half:
+                intermediates.append(x)
+            elif i >= half:
+                skip_idx = self.config.n_layer - 1 - i
+                x = x + self.skip_lambdas[i - half] * intermediates[skip_idx]
             ve = self.value_embeds[str(i)](idx) if str(i) in self.value_embeds else None
             x = block(x, ve, masks[i])
         x = norm(x)
@@ -309,7 +318,7 @@ class MuonAdamW:
                     lr, wd, betas = unembedding_lr * dmodel_lr_scale, 0.0, adam_betas
                 elif "resid_lambdas" in path:
                     lr, wd, betas = scalar_lr * 0.01, 0.0, adam_betas
-                elif "x0_lambdas" in path:
+                elif "x0_lambdas" in path or "skip_lambdas" in path:
                     lr, wd, betas = scalar_lr, 0.0, (0.96, 0.95)
                 else:
                     lr, wd, betas = unembedding_lr * dmodel_lr_scale, 0.0, adam_betas
