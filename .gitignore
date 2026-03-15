@@ -25,6 +25,9 @@ dev/
 # Training output log
 run.log
 
+# Model checkpoints
+*.npz
+
 # Analysis artifacts
 progress.png
 
