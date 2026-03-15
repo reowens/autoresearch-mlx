@@ -101,3 +101,4 @@ f1ba6b5	1.429988	21.2	discard	logit soft-cap 20 (from 15; too loose; much worse 
 dd2140b	1.432561	21.2	discard	centered norm (LayerNorm-style mean subtraction; much worse 1.433 vs 1.311; DC component needed)
 8a7b0bb	1.431247	21.2	discard	learnable per-head attention temperature (scale q after QK-norm; much worse 1.431 vs 1.311; destabilizes attention)
 4014e21	1.425569	21.2	discard	non-traditional RoPE (Llama-style interleaved dim pairing; much worse 1.426 vs 1.311)
+dd05a8f	1.422229	21.2	discard	all-sliding-window (WINDOW_PATTERN=S; only last layer full attention; 1.422 vs 1.311)
