@@ -176,11 +176,7 @@ class GPT(nn.Module):
         self.x0_lambdas = mx.zeros((config.n_layer,), dtype=mx.float32)
         head_dim = config.n_embd // config.n_head
         kv_dim = config.n_kv_head * head_dim
-        self.value_embeds = {
-            str(i): nn.Embedding(config.vocab_size, kv_dim)
-            for i in range(config.n_layer)
-            if has_ve(i, config.n_layer)
-        }
+        self.value_embed = nn.Embedding(config.vocab_size, kv_dim)
         self._mask_cache = {}
 
     def init_weights(self):
@@ -203,8 +199,7 @@ class GPT(nn.Module):
         self.resid_lambdas = mx.ones((self.config.n_layer,), dtype=mx.float32)
         self.x0_lambdas = mx.full((self.config.n_layer,), 0.1, dtype=mx.float32)
 
-        for ve in self.value_embeds.values():
-            ve.weight = mx.random.uniform(-scale, scale, ve.weight.shape).astype(mx.bfloat16)
+        self.value_embed.weight = mx.random.uniform(-scale, scale, self.value_embed.weight.shape).astype(mx.bfloat16)
 
     def _compute_window_sizes(self, config):
         pattern = config.window_pattern.upper()
@@ -237,9 +232,10 @@ class GPT(nn.Module):
         x = self.wte(idx)
         x = norm(x)
         x0 = x
+        ve_shared = self.value_embed(idx)
         for i, block in enumerate(self.blocks):
             x = self.resid_lambdas[i] * x + self.x0_lambdas[i] * x0
-            ve = self.value_embeds[str(i)](idx) if str(i) in self.value_embeds else None
+            ve = ve_shared if has_ve(i, self.config.n_layer) else None
             x = block(x, ve, masks[i])
         x = norm(x)
 
