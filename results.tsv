@@ -109,3 +109,4 @@ cad8945	1.356563	21.2	discard	sqrt warmdown schedule (cooldown^0.5 keeps LR high
 57b2350	0.000000	0.0	crash	SWA during warmdown (378 snapshots averaged; training OK but eval crashed: mask type mismatch after weight replacement)
 3a509be	1.314170	21.2	discard	trapezoidal LR schedule (5% warmup + 35% full LR + 60% warmdown; long warmdown hurts)
 654de9a	1.305475	21.2	keep	reduce weight decay 0.2->0.15 (retest with sigmoid gates; synergizes for new best)
+4580087	1.312934	21.2	discard	U-Net skip connections (layer 0→5 1→4 2→3 with learnable gates; worse 1.313 vs 1.305; x0 residual sufficient)
