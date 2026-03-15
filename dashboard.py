@@ -516,10 +516,13 @@ class DashboardReporter(LoopReporter):
                 last = f.readlines()[-1].strip().split("\t")
             bpb = float(last[1])
             status = last[3]
-            results = get_results_summary()
-            best = results["best_bpb"] if results else None
-            if best and self._current_round:
-                delta = bpb - best
+            # Compare against session best (same time budget), not all-time best
+            prev_best = self.screen._best_bpb
+            if prev_best is None:
+                results = get_results_summary()
+                prev_best = results["best_bpb"] if results else None
+            if prev_best and self._current_round:
+                delta = bpb - prev_best
                 delta_str = f"+{delta:.4f}" if delta >= 0 else f"{delta:.4f}"
                 icon = "✓" if status == "keep" else "✗"
                 css = "result-keep" if status == "keep" else (
