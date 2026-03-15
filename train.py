@@ -297,7 +297,7 @@ class MuonAdamW:
                         "lr": matrix_lr,
                         "momentum": 0.95,
                         "ns_steps": 5,
-                        "beta2": 0.95,
+                        "beta2": 0.99,
                         "weight_decay": weight_decay,
                     }
                 self.muon_groups[shape]["paths"].append(path)
@@ -488,7 +488,7 @@ UNEMBEDDING_LR = 0.004
 MATRIX_LR = 0.04
 SCALAR_LR = 0.5
 WEIGHT_DECAY = 0.2
-ADAM_BETAS = (0.8, 0.99)
+ADAM_BETAS = (0.8, 0.95)
 WARMUP_RATIO = 0.0
 WARMDOWN_RATIO = 0.3
 FINAL_LR_FRAC = 0.0
