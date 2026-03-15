@@ -88,3 +88,4 @@ c715df7	1.385528	21.1	discard	shared VE embedding (single table across all VE la
 c8a7d25	1.314580	20.7	discard	reduce MLP expansion 4x to 3x (21% more tokens but capacity loss; 1.315 vs 1.311)
 04b4612	1.310873	21.2	discard	reduce weight decay 0.2->0.15 (identical to baseline; 1.311 vs 1.311)
 0323a60	1.325706	21.2	discard	multi-token prediction (2nd-next token aux head weight 0.3; worse 1.326 vs 1.311)
+ee345ec	1.448732	21.2	discard	halve SCALAR_LR 0.5->0.25 (much worse; residual scalars need fast adaptation)
