@@ -97,3 +97,4 @@ b620e8d	1.443647	21.2	discard	depth 8 at 10min (ASPECT_RATIO=32; model_dim=256 s
 755730d	1.516021	21.2	discard	cosine LR with warm restart (2 cycles; 2nd at 0.5x max LR; much worse 1.516 vs 1.311; restart disrupts learned representations)
 c065579	1.429942	21.2	discard	Muon beta2 0.95->0.99 (smoother NorMuon variance; much worse 1.430 vs 1.311; too slow to adapt in 556 steps)
 a000c1e	1.431694	21.2	discard	Muon initial momentum 0.90 (from 0.85; much worse 1.432 vs 1.311; higher start momentum destabilizes early training)
+f1ba6b5	1.429988	21.2	discard	logit soft-cap 20 (from 15; too loose; much worse 1.430 vs 1.311)
