@@ -606,6 +606,10 @@ total_training_time = 0.0
 step = 0
 t_compiled = None
 
+# EMA of model weights for improved eval
+EMA_DECAY = 0.995
+ema_params = None
+
 while True:
     t0 = time.time()
     accum_grads = None
@@ -635,6 +639,15 @@ while True:
     optimizer.update(model, accum_grads, muon_momentum=muon_momentum, muon_weight_decay=muon_weight_decay)
     mx.eval(model.parameters(), *optimizer.state)
     compile_state[0] = model.state  # refresh for next compiled call
+
+    # EMA update: maintain exponential moving average of all parameters
+    current_params = dict(tree_flatten(model.parameters()))
+    if ema_params is None:
+        ema_params = {k: v.astype(mx.float32) for k, v in current_params.items()}
+    else:
+        for k, v in current_params.items():
+            ema_params[k] = EMA_DECAY * ema_params[k] + (1 - EMA_DECAY) * v.astype(mx.float32)
+    mx.eval(list(ema_params.values()))
 
     train_loss_f = float(train_loss.item())
 
@@ -688,6 +701,13 @@ t_train = time.time()
 print(f"Training completed in {t_train - t_compiled:.1f}s")
 
 total_tokens = step * TOTAL_BATCH_SIZE
+
+# Swap EMA weights into model for evaluation
+if ema_params is not None:
+    print("Swapping EMA weights for evaluation...")
+    for path, value in ema_params.items():
+        optimizer._set_path_value(model, path, value.astype(mx.bfloat16))
+    mx.eval(model.parameters())
 
 # Save checkpoint before eval so training isn't lost if eval OOMs
 mx.savez("checkpoint.npz", **dict(tree_flatten(model.parameters())))
