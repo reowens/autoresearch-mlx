@@ -65,3 +65,4 @@ b428bc2	1.317104	21.2	discard	FINAL_LR_FRAC 0.05 (LR floors at 5%; restored corr
 729d778	1.320213	21.2	discard	x0_init 0.05 (reduce x0 skip scalar from 0.1 to 0.05; worse quality)
 543dda6	1.315882	21.2	discard	momentum warmup 200 (reduce from 300 to 200; worse quality)
 8e0a7d7	1.317625	21.2	discard	embedding weight decay (wte=0.001 ve=0.003 lm_head=0.01; worse quality)
+aa845ce	1.310544	21.2	discard	WARMDOWN_RATIO 0.75 (most of training is warmdown; worse 1.311 vs 1.277)
