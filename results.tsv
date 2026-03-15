@@ -63,3 +63,4 @@ ccc3adb	1.597130	21.2	discard	global gradient norm clipping max_norm=1.0 (too ag
 2a94e0b	1.295582	26.4	discard	init scale 0.68 (upstream narrow optimum; worse on our hardware/depth)
 b428bc2	1.317104	21.2	discard	FINAL_LR_FRAC 0.05 (LR floors at 5%; restored correct baseline with x0 residual)
 729d778	1.320213	21.2	discard	x0_init 0.05 (reduce x0 skip scalar from 0.1 to 0.05; worse quality)
+543dda6	1.315882	21.2	discard	momentum warmup 200 (reduce from 300 to 200; worse quality)
