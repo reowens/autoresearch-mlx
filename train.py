@@ -59,6 +59,42 @@ def get_peak_memory_mb():
     return mx.get_peak_memory() / 1024 / 1024
 
 
+def get_apple_silicon_info():
+    """Detect Apple Silicon chip and GPU cores for MFU calculation."""
+    import subprocess as sp
+    import re as _re
+    chip_name = "Apple Silicon"
+    gpu_cores = 8
+    try:
+        result = sp.run(["sysctl", "-n", "machdep.cpu.brand_string"],
+                        capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            chip_name = result.stdout.strip()
+    except Exception:
+        pass
+    try:
+        result = sp.run(["system_profiler", "SPDisplaysDataType"],
+                        capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            m = _re.search(r"Total Number of Cores:\s*(\d+)", result.stdout)
+            if m:
+                gpu_cores = int(m.group(1))
+    except Exception:
+        pass
+    return chip_name, gpu_cores
+
+
+def estimate_peak_flops(chip_name, gpu_cores):
+    """Estimate peak bf16 FLOPS for Apple Silicon."""
+    import re as _re
+    m = _re.search(r"(m[1-5])", chip_name.lower())
+    gen = m.group(1) if m else "m4"
+    flops_per_core = {
+        "m1": 0.5e12, "m2": 0.55e12, "m3": 0.65e12, "m4": 0.7e12,
+    }.get(gen, 0.65e12)
+    return gpu_cores * flops_per_core
+
+
 class CausalSelfAttention(nn.Module):
     def __init__(self, config, layer_idx):
         super().__init__()
@@ -165,7 +201,7 @@ class GPT(nn.Module):
                 block.attn.ve_gate.weight = mx.zeros_like(block.attn.ve_gate.weight).astype(mx.bfloat16)
 
         self.resid_lambdas = mx.ones((self.config.n_layer,), dtype=mx.float32)
-        self.x0_lambdas = mx.full((self.config.n_layer,), 0.1, dtype=mx.float32)
+        self.x0_lambdas = mx.full((self.config.n_layer,), 0.05, dtype=mx.float32)
 
         for ve in self.value_embeds.values():
             ve.weight = mx.random.uniform(-scale, scale, ve.weight.shape).astype(mx.bfloat16)
@@ -360,8 +396,11 @@ class MuonAdamW:
         )
         g = (1 - muon_momentum) * stacked_grads + muon_momentum * state["momentum_buffer"]
 
-        # --- Polar express orthogonalization (bfloat16 for efficiency) ---
-        X = g.astype(mx.bfloat16)
+        # --- Polar express orthogonalization (float32 for precision) ---
+        # float32 avoids bf16 norm precision loss that causes NaN divergence
+        # on larger matrices. On Apple Silicon, float32 is nearly as fast as
+        # bf16 (no tensor cores), so there's no speed penalty.
+        X = g.astype(mx.float32)
         X_norm = mx.sqrt(mx.sum(X * X, axis=(-2, -1), keepdims=True))
         X = X / (X_norm * 1.02 + 1e-6)
 
@@ -450,7 +489,7 @@ MATRIX_LR = 0.04
 SCALAR_LR = 0.5
 WEIGHT_DECAY = 0.2
 ADAM_BETAS = (0.8, 0.95)
-WARMUP_RATIO = 0.05
+WARMUP_RATIO = 0.0
 WARMDOWN_RATIO = 0.3
 FINAL_LR_FRAC = 0.0
 
@@ -506,6 +545,11 @@ model = GPT(config)
 model.init_weights()
 mx.eval(model.parameters())
 num_params = sum(param.size for _, param in tree_flatten(model.parameters()))
+
+# Hardware detection for MFU
+chip_name, gpu_cores = get_apple_silicon_info()
+peak_flops = estimate_peak_flops(chip_name, gpu_cores)
+print(f"Hardware: {chip_name} ({gpu_cores} GPU cores, {peak_flops/1e12:.1f} TFLOPS peak)")
 
 tokens_per_fwdbwd = DEVICE_BATCH_SIZE * MAX_SEQ_LEN
 assert TOTAL_BATCH_SIZE % tokens_per_fwdbwd == 0
@@ -616,7 +660,14 @@ val_bpb = evaluate_bpb(model, tokenizer, FINAL_EVAL_BATCH_SIZE)
 t_eval = time.time()
 print(f"Final eval completed in {t_eval - t_train:.1f}s")
 
-steady_state_mfu = 0.0
+# MFU: actual FLOPS / peak FLOPS
+# Approximate FLOPS per token: 6 * num_params (forward + backward)
+if total_training_time > 0 and peak_flops > 0:
+    tokens_per_sec = total_tokens / total_training_time
+    flops_achieved = tokens_per_sec * 6 * num_params
+    steady_state_mfu = 100.0 * flops_achieved / peak_flops
+else:
+    steady_state_mfu = 0.0
 peak_vram_mb = get_peak_memory_mb()
 
 print("---")

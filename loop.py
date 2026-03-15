@@ -26,7 +26,37 @@ from claude_agent_sdk.types import StreamEvent
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 
-_prompt_path = os.path.join(DIR, "program.md")
+# ── Flywheel config (project-level, optional) ────────────────────────────────
+
+import json as _json
+
+FLYWHEEL_PATH = os.path.join(DIR, "flywheel.json")
+
+_FLYWHEEL_DEFAULTS = {
+    "system_prompt": "program.md",
+    "runner_detect": "uv run train.py",
+    "log_file": "run.log",
+    "results_file": "results.tsv",
+    "metric_name": "val_bpb",
+    "metric_direction": "minimize",
+    "log_regex": r"step\s+\d+\s+\((\d+\.\d+)%\).*loss:\s+([\d.]+).*tok/sec:\s+([\d,]+).*remaining:\s+(\d+)s",
+    "log_groups": ["pct", "loss", "tps", "remaining"],
+}
+
+def load_flywheel_config():
+    if os.path.exists(FLYWHEEL_PATH):
+        try:
+            with open(FLYWHEEL_PATH) as f:
+                return {**_FLYWHEEL_DEFAULTS, **_json.load(f)}
+        except Exception:
+            pass
+    return dict(_FLYWHEEL_DEFAULTS)
+
+FW = load_flywheel_config()
+
+# ── Prompts and constants ─────────────────────────────────────────────────────
+
+_prompt_path = os.path.join(DIR, FW["system_prompt"])
 if not os.path.exists(_prompt_path):
     sys.exit(f"  Error: {_prompt_path} not found")
 with open(_prompt_path) as f:
@@ -36,17 +66,25 @@ DEFAULT_TIME_BUDGET = 5  # minutes
 OVERHEAD_MIN = 2  # ~2 min overhead per run (compile, eval, git)
 MINS_PER_RUN = DEFAULT_TIME_BUDGET + OVERHEAD_MIN
 
-MSG_FIRST = (
-    "Read results.tsv, train.py, and prepare.py. Run exactly ONE experiment: "
-    "modify train.py, commit, train, evaluate, update results.tsv, keep or discard. "
-    "IMPORTANT: Run only ONE training run. If it crashes or diverges, log it and STOP. "
-    "Do NOT revert and try something else — that counts as a second experiment. "
-    "Stop after this single experiment is complete."
+_DEFAULT_MSG_FIRST = (
+    "Read results.tsv, train.py, and prepare.py. "
+    "BEFORE proposing an experiment, check results.tsv carefully — do NOT repeat "
+    "or closely re-test anything already tried. Find something genuinely new. "
+    "If suggestions.md exists, read it for ideas — but still check results.tsv first. "
+    "Run exactly ONE experiment: modify train.py, commit, train, evaluate, "
+    "update results.tsv, keep or discard. "
+    "IMPORTANT: ONE training run only. If it crashes or diverges, log it and STOP. "
+    "Do NOT revert and try something else. Stop after this single experiment."
 )
-MSG_NEXT = (
+_DEFAULT_MSG_NEXT = (
+    "Check results.tsv for what's been tried. Find something NEW — do not repeat "
+    "or closely re-test previous experiments. If suggestions.md exists, check it for ideas. "
     "Run exactly ONE more experiment, then stop. "
-    "If it crashes or diverges, log it and stop — do not start another."
+    "If it crashes or diverges, log it and stop."
 )
+
+MSG_FIRST = FW.get("msg_first", _DEFAULT_MSG_FIRST)
+MSG_NEXT = FW.get("msg_next", _DEFAULT_MSG_NEXT)
 
 
 # ── Reporter protocol ────────────────────────────────────────────────────────
@@ -119,7 +157,7 @@ class CLIReporter(LoopReporter):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def print_results():
-    path = os.path.join(DIR, "results.tsv")
+    path = os.path.join(DIR, FW["results_file"])
     if not os.path.exists(path):
         print("  No results.tsv found.")
         return
@@ -196,6 +234,9 @@ async def run(num_runs, reporter=None, config=None):
     log.info("Config: model=%s effort=%s time_budget=%dm", model, effort, time_budget_min)
 
     for round_num in range(1, num_runs + 1):
+        if hasattr(reporter, 'stop_requested') and reporter.stop_requested:
+            log.info("Graceful stop requested after round %d", round_num - 1)
+            break
         elapsed = (time.time() - start) / 60
         await reporter.on_round_start(round_num, num_runs, elapsed, total_cost)
 
@@ -243,7 +284,7 @@ async def run(num_runs, reporter=None, config=None):
                                 cmd = inp.get("command", "") if b.name == "Bash" else ""
                                 if b.name == "Bash" and cmd:
                                     log.debug("Bash: %s", cmd[:120])
-                                if "uv run" in cmd and "train.py" in cmd and ">" in cmd:
+                                if FW["runner_detect"] in cmd and ">" in cmd:
                                     log.info("Training detected")
                                     await reporter.on_training_detected()
                                 else:
@@ -294,6 +335,16 @@ def dry_run():
 
 
 def main():
+    if os.environ.get("CLAUDECODE"):
+        sys.exit(
+            "\n  Error: loop.py can't run inside Claude Code (nested sessions aren't supported).\n"
+            "  Open a separate terminal and run:\n\n"
+            f"    cd {DIR}\n"
+            f"    uv run start.py          # TUI with settings (time budget, model, etc.)\n"
+            f"    uv run start.py 8        # TUI, skip to 8 runs with saved settings\n"
+            f"    uv run loop.py 8         # headless CLI (set TIME_BUDGET=600 for 10 min)\n"
+        )
+
     args = [a for a in sys.argv[1:] if a != "--dry-run"]
     if "--dry-run" in sys.argv:
         dry_run()

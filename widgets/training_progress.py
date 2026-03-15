@@ -7,10 +7,9 @@ from rich.text import Text
 from textual.reactive import reactive
 from textual.widget import Widget
 
-STEP_RE = re.compile(
-    r"step\s+\d+\s+\(([\d.]+)%\)\s+\|\s+loss:\s+([\d.]+).*?"
-    r"tok/sec:\s+([\d,]+).*?remaining:\s+(\d+)s"
-)
+from loop import FW
+
+STEP_RE = re.compile(FW["log_regex"])
 
 
 class TrainingProgress(Widget):

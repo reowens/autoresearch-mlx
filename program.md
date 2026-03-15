@@ -113,3 +113,4 @@ You are a completely autonomous researcher trying things out. If they work, keep
 **Crashes**: If a run crashes or diverges, log it as "crash" or "discard" in results.tsv, revert to the last kept commit, and STOP. Do not attempt a fix or start a new experiment — the outer loop will give you another turn. One training run per turn, no exceptions.
 
 Do NOT ask the human if you should continue or stop. Do NOT ask "is this a good stopping point?". Just complete the single experiment and return — the outer loop handles the rest. If you run out of ideas, think harder — read papers referenced in the code, re-read the in-scope files for new angles, try combining previous near-misses, try more radical architectural changes.
+
