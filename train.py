@@ -510,8 +510,7 @@ def get_lr_multiplier(progress):
     if progress < 1.0 - WARMDOWN_RATIO:
         return 1.0
     cooldown = (1.0 - progress) / WARMDOWN_RATIO
-    t = cooldown ** 0.5  # sqrt warmdown: LR stays higher longer, drops sharply at end
-    return t * 1.0 + (1 - t) * FINAL_LR_FRAC
+    return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
 
 
 def get_muon_momentum(step):
