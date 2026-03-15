@@ -505,12 +505,17 @@ TRIAGE_KILL = 0.5       # kill if effective rank drops below this fraction of in
 
 
 def get_lr_multiplier(progress):
-    if progress < WARMUP_RATIO:
-        return progress / WARMUP_RATIO if WARMUP_RATIO > 0 else 1.0
-    if progress < 1.0 - WARMDOWN_RATIO:
-        return 1.0
-    cooldown = (1.0 - progress) / WARMDOWN_RATIO
-    return cooldown * 1.0 + (1 - cooldown) * FINAL_LR_FRAC
+    """Cosine annealing with warm restart: 2 cycles, second starts at half max LR."""
+    if progress >= 1.0:
+        return 0.0
+    n_cycles = 2
+    cycle = min(int(progress * n_cycles), n_cycles - 1)
+    cycle_start = cycle / n_cycles
+    cycle_len = 1.0 / n_cycles
+    cycle_progress = (progress - cycle_start) / cycle_len
+    # Each subsequent cycle starts at lower max LR (1.0, 0.5, ...)
+    max_lr = 1.0 / (cycle + 1)
+    return max_lr * 0.5 * (1 + math.cos(math.pi * cycle_progress))
 
 
 def get_muon_momentum(step):
