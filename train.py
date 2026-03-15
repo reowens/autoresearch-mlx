@@ -303,12 +303,10 @@ class MuonAdamW:
                 self.muon_groups[shape]["paths"].append(path)
             else:
                 # Everything else → AdamW
-                if "wte" in path:
-                    lr, wd, betas = embedding_lr * dmodel_lr_scale, 0.001, adam_betas
-                elif "value_embeds" in path:
-                    lr, wd, betas = embedding_lr * dmodel_lr_scale, 0.003, adam_betas
+                if "wte" in path or "value_embeds" in path:
+                    lr, wd, betas = embedding_lr * dmodel_lr_scale, 0.0, adam_betas
                 elif "lm_head" in path:
-                    lr, wd, betas = unembedding_lr * dmodel_lr_scale, 0.01, adam_betas
+                    lr, wd, betas = unembedding_lr * dmodel_lr_scale, 0.0, adam_betas
                 elif "resid_lambdas" in path:
                     lr, wd, betas = scalar_lr * 0.01, 0.0, adam_betas
                 elif "x0_lambdas" in path:
