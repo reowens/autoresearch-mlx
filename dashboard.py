@@ -844,7 +844,7 @@ LOG_FILE = os.path.join(DIR, "dashboard.log")
 
 
 def main():
-    handler = logging.FileHandler(LOG_FILE, mode="w")
+    handler = logging.FileHandler(LOG_FILE, mode="a")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     handler.setLevel(logging.DEBUG)
     root = logging.getLogger()
