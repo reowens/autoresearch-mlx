@@ -100,7 +100,7 @@ Each experiment:
 2. Tune `train.py` with an experimental idea by directly hacking the code.
 3. `git add autoresearch-mlx/train.py && git commit -m "experiment: <description>"` (never `git add -A` — this may be inside a larger repo)
 4. Run the experiment: `uv run train.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
-5. Read out the results: `grep "^val_bpb:\|^peak_vram_mb:" run.log`
+5. Read out the results: `tr '\r' '\n' < run.log | grep "^val_bpb:\|^peak_vram_mb:"` (the `tr` handles carriage returns from progress output)
 6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
 7. Record the results in the tsv
 8. If val_bpb improved (lower):

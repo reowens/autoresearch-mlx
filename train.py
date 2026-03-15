@@ -683,7 +683,7 @@ while True:
     if step >= STARTUP_EXCLUDE_STEPS and total_training_time >= TIME_BUDGET:
         break
 
-print()
+print("\n")  # Extra newline to clear \r progress line in redirected output
 t_train = time.time()
 print(f"Training completed in {t_train - t_compiled:.1f}s")
 
