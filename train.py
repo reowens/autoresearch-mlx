@@ -141,10 +141,12 @@ class CausalSelfAttention(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, layer_idx):
         super().__init__()
-        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=False)
-        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=False)
+        # Allocate more MLP capacity to later layers (FLOP-matched: 3x early, 6x late)
+        expansion = 6 if layer_idx >= config.n_layer - 2 else 3
+        self.c_fc = nn.Linear(config.n_embd, expansion * config.n_embd, bias=False)
+        self.c_proj = nn.Linear(expansion * config.n_embd, config.n_embd, bias=False)
 
     def __call__(self, x):
         x = self.c_fc(x)
@@ -156,7 +158,7 @@ class Block(nn.Module):
     def __init__(self, config, layer_idx):
         super().__init__()
         self.attn = CausalSelfAttention(config, layer_idx)
-        self.mlp = MLP(config)
+        self.mlp = MLP(config, layer_idx)
 
     def __call__(self, x, ve, mask):
         x = x + self.attn(norm(x), ve, mask)
