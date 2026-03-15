@@ -69,3 +69,4 @@ aa845ce	1.310544	21.2	discard	WARMDOWN_RATIO 0.75 (most of training is warmdown;
 0399e37	1.307058	21.2	discard	short window seq_len/8 (256 tokens; less attention compute but worse quality)
 c774e47	1.309926	21.2	discard	RoPE base 200K (from 10K; worse quality 1.310 vs 1.277)
 9732b78	0.000000	0.0	crash	EMA weights (decay=0.995) — load_weights KeyError on mixed list/dict tree
+6b18813	0.000000	0.0	crash	float16 weights (NaN at step 117 — squared ReLU overflows f16 max 65504)
