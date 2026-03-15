@@ -107,3 +107,4 @@ cad8945	1.356563	21.2	discard	sqrt warmdown schedule (cooldown^0.5 keeps LR high
 08f090f	1.311322	21.2	discard	bookend attention (LSSSS window; full attn at first+last layer; 1.311 vs 1.311 baseline)
 2fd4f96	1.309363	21.2	keep	sigmoid skip gates (resid_lambdas through sigmoid; init 1.5 → ~0.82; bounded residual scaling)
 57b2350	0.000000	0.0	crash	SWA during warmdown (378 snapshots averaged; training OK but eval crashed: mask type mismatch after weight replacement)
+3a509be	1.314170	21.2	discard	trapezoidal LR schedule (5% warmup + 35% full LR + 60% warmdown; long warmdown hurts)
