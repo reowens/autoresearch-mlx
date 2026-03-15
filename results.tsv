@@ -82,3 +82,4 @@ b8c77dd	1.400399	21.2	discard	x0_init 0.15 (increase x0 skip from 0.1 to 0.15; t
 54a9162	1.323664	21.2	discard	remove resid_lambdas (simplify residual to x + x0_lambda*x0; worse 1.324 vs 1.277)
 9e47b25	1.312417	21.2	discard	Muon beta2 0.95->0.90 (faster NorMuon variance adaptation; worse 1.312 vs 1.277)
 7e1c733	1.545293	26.5	discard	EMA weights (decay=0.995) — much worse 1.545 vs 1.277; averages in early bad weights + 27GB memory
+e7e2cc5	1.334776	21.2	discard	increase weight decay 0.2->0.25 (stronger regularization hurts; 1.335 vs 1.277)
