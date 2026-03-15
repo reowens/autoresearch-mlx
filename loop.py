@@ -237,6 +237,17 @@ async def run(num_runs, reporter=None, config=None):
         if hasattr(reporter, 'stop_requested') and reporter.stop_requested:
             log.info("Graceful stop requested after round %d", round_num - 1)
             break
+
+        # Enforce clean state: restore train.py from "best" tag before each round
+        best_restore = subprocess.run(
+            ["git", "checkout", "best", "--", "train.py"],
+            cwd=DIR, capture_output=True, text=True,
+        )
+        if best_restore.returncode == 0:
+            log.info("Round %d: restored train.py from 'best' tag", round_num)
+        else:
+            log.warning("Round %d: no 'best' tag found, using current train.py", round_num)
+
         elapsed = (time.time() - start) / 60
         await reporter.on_round_start(round_num, num_runs, elapsed, total_cost)
 

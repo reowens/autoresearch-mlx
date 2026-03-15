@@ -103,8 +103,12 @@ Each experiment:
 5. Read out the results: `grep "^val_bpb:\|^peak_vram_mb:" run.log`
 6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
 7. Record the results in the tsv
-8. If val_bpb improved (lower), `git add autoresearch-mlx/results.tsv && git commit --amend --no-edit` to include the log, advancing the branch
-9. If val_bpb is equal or worse, record the discard in results.tsv, then revert train.py to the last kept state: `git checkout HEAD~1 -- autoresearch-mlx/train.py && git add autoresearch-mlx/train.py autoresearch-mlx/results.tsv && git commit -m "discard: <description>"`. Do NOT use `git reset --hard` — it destroys other files on the branch.
+8. If val_bpb improved (lower):
+   - `git tag -f best HEAD` to move the golden tag forward
+   - `git add autoresearch-mlx/results.tsv && git commit --amend --no-edit` to include the log
+9. If val_bpb is equal or worse, record the discard in results.tsv, then revert train.py to the golden config: `git checkout best -- autoresearch-mlx/train.py && git add autoresearch-mlx/train.py autoresearch-mlx/results.tsv && git commit -m "discard: <description>"`. Do NOT use `git reset --hard` — it destroys other files on the branch.
+
+**The `best` tag always points to the last kept config.** The loop restores train.py from this tag before each round, so you always start from a clean state. Never revert to HEAD~1.
 
 You are a completely autonomous researcher trying things out. If they work, keep. If they don't, discard. And you're advancing the branch so that you can iterate. If you feel like you're getting stuck in some way, you can rewind but you should probably do this very very sparingly (if ever).
 
@@ -113,4 +117,24 @@ You are a completely autonomous researcher trying things out. If they work, keep
 **Crashes**: If a run crashes or diverges, log it as "crash" or "discard" in results.tsv, revert to the last kept commit, and STOP. Do not attempt a fix or start a new experiment — the outer loop will give you another turn. One training run per turn, no exceptions.
 
 Do NOT ask the human if you should continue or stop. Do NOT ask "is this a good stopping point?". Just complete the single experiment and return — the outer loop handles the rest. If you run out of ideas, think harder — read papers referenced in the code, re-read the in-scope files for new angles, try combining previous near-misses, try more radical architectural changes.
+
+## Re-baseline first
+
+**Your first experiment MUST be a re-baseline.** Even if `train.py` already matches commit `5697a23`, you must run training to get a fresh val_bpb number. Infrastructure has changed (structural triage, checkpoint saving) and we need to confirm the 1.277 score is reproducible. Do NOT skip this step. Do NOT analyze or propose experiments until the baseline run is complete. Commit as "baseline: re-verify best config", run training, log the result.
+
+## Suggested experiments (from upstream discussion-43)
+
+The upstream CUDA repo validated these hyperparameter changes as a package (val_bpb 0.997→0.977 on H100). Test **individually** — safest first. At 5-min time budgets, prioritize changes that show signal quickly:
+
+1. **Init scale 0.68**: Multiply the transformer weight init scale by 0.68 (i.e. `scale = 3**0.5 * n_embd**-0.5 * 0.68`). Narrow optimum — 0.66 and 0.70 both tested worse upstream.
+2. **x0_init 0.05**: Reduce x0 skip scalar init from 0.1 to 0.05 (in `init_weights`, change `mx.full(..., 0.1, ...)` to 0.05).
+3. **Short window seq_len/8**: Change `short_window = long_window // 2` to `long_window // 8` (256 tokens instead of 1024). Less attention compute = faster steps = more tokens at 5 min.
+4. **Embedding weight decay**: Add weight decay to lm_head (0.01), wte embeddings (0.001), and value embeddings (0.003). Currently all 0.0. Requires modifying the optimizer to pass per-group weight decay.
+5. **RoPE base 200K**: Increase from 10K to 200K. We tested 50K (neutral), but 200K is a much bigger jump.
+
+**Skip for 5-min budgets** (need longer training to show signal):
+- WARMDOWN_RATIO 0.75 — only ~30 steps at full LR with 5-min budget, likely hurts
+- Momentum warmup 200 vs 300 — too subtle at ~150 total steps
+
+**Important**: Do NOT change depth, batch size, or aspect ratio from these suggestions — those were tuned for H100 throughput and don't transfer to Apple Silicon. Our depth 6 with GQA is already validated as optimal for our hardware.
 
