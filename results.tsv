@@ -74,3 +74,4 @@ c774e47	1.309926	21.2	discard	RoPE base 200K (from 10K; worse quality 1.310 vs 1
 4cbb2ed	1.435048	21.2	discard	attention scale=1.0 (QK-norm makes 1/sqrt(d) unnecessary; much worse)
 27530ad	1.407379	21.2	discard	GELU activation instead of squared ReLU (much worse; squared ReLU better at this scale)
 bdb9c17	1.393179	21.2	discard	short_window seq_len/4 (512 tokens; too aggressive quality loss vs 1024)
+b8c77dd	1.400399	21.2	discard	x0_init 0.15 (increase x0 skip from 0.1 to 0.15; too strong)
