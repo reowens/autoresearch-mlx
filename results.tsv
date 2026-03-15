@@ -80,3 +80,4 @@ b8c77dd	1.400399	21.2	discard	x0_init 0.15 (increase x0 skip from 0.1 to 0.15; t
 758caa2	1.406190	21.2	discard	remove cautious weight decay mask in Muon (standard decoupled WD; much worse)
 0b50394	1.437584	21.2	discard	deep supervision with aux loss from mid-layer (layer 3/6 weight 0.1; much worse)
 54a9162	1.323664	21.2	discard	remove resid_lambdas (simplify residual to x + x0_lambda*x0; worse 1.324 vs 1.277)
+9e47b25	1.312417	21.2	discard	Muon beta2 0.95->0.90 (faster NorMuon variance adaptation; worse 1.312 vs 1.277)
