@@ -67,25 +67,27 @@ grep "^val_bpb:" run.log
 
 When an experiment is done, log it to `results.tsv` (tab-separated, NOT comma-separated — commas break in descriptions).
 
-The TSV has a header row and 5 columns:
+The TSV has a header row and 7 columns:
 
 ```
-commit	val_bpb	memory_gb	status	description
+commit	val_bpb	tokens_M	steps	memory_gb	status	description
 ```
 
 1. git commit hash (short, 7 chars)
 2. val_bpb achieved (e.g. 1.234567) — use 0.000000 for crashes
-3. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
-4. status: `keep`, `discard`, or `crash`
-5. short text description of what this experiment tried
+3. tokens_M — total tokens trained in millions (from `total_tokens_M:` in output) — leave blank for crashes
+4. steps — number of optimizer steps (from `num_steps:` in output) — leave blank for crashes
+5. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
+6. status: `keep`, `discard`, or `crash`
+7. short text description of what this experiment tried
 
 Example:
 
 ```
-commit	val_bpb	memory_gb	status	description
-383abb4	2.667000	26.9	keep	baseline
-909dd59	2.588904	26.9	keep	halve total batch size to 2^16
-4161af3	2.533728	26.9	keep	increase matrix LR to 0.04
+commit	val_bpb	tokens_M	steps	memory_gb	status	description
+383abb4	2.667000	9.1	556	26.9	keep	baseline
+909dd59	2.588904	9.1	556	26.9	keep	halve total batch size to 2^16
+4161af3	2.533728	9.1	556	26.9	keep	increase matrix LR to 0.04
 ```
 
 ## The experiment loop
@@ -100,7 +102,7 @@ Each experiment:
 2. Tune `train.py` with an experimental idea by directly hacking the code.
 3. `git add autoresearch-mlx/train.py && git commit -m "experiment: <description>"` (never `git add -A` — this may be inside a larger repo)
 4. Run the experiment: `uv run train.py > run.log 2>&1` (redirect everything — do NOT use tee or let output flood your context)
-5. Read out the results: `tr '\r' '\n' < run.log | grep "^val_bpb:\|^peak_vram_mb:"` (the `tr` handles carriage returns from progress output)
+5. Read out the results: `tr '\r' '\n' < run.log | grep "^val_bpb:\|^peak_vram_mb:\|^total_tokens_M:\|^num_steps:"` (the `tr` handles carriage returns from progress output)
 6. If the grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
 7. Record the results in the tsv
 8. If val_bpb improved (lower):

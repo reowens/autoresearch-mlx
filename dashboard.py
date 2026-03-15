@@ -106,7 +106,7 @@ def get_results_summary():
         if len(lines) < 2:
             return None
         n = len(lines) - 1
-        kept = [l for l in lines[1:] if "\tkeep\t" in l]
+        kept = [l for l in lines[1:] if "\tkeep\t" in l or l.endswith("\tkeep\t")]
         best_bpb = min((float(l.split("\t")[1]) for l in kept), default=None)
         return {"total": n, "kept": len(kept), "best_bpb": best_bpb}
     except Exception:
@@ -515,7 +515,7 @@ class DashboardReporter(LoopReporter):
             with open(RESULTS_PATH) as f:
                 last = f.readlines()[-1].strip().split("\t")
             bpb = float(last[1])
-            status = last[3]
+            status = last[5] if len(last) >= 7 else last[3]
             # Compare against session best (same time budget), not all-time best
             prev_best = self.screen._best_bpb
             if prev_best is None:
@@ -702,10 +702,10 @@ class DashboardScreen(Screen):
                 lines = [l.strip() for l in f if l.strip()]
             if len(lines) < 2:
                 return
-            table.add_columns("", "val_bpb", "delta", "description")
-            data_lines = [l for l in lines[1:] if len(l.split("\t")) >= 5]
+            table.add_columns("", "val_bpb", "tokens", "steps", "delta", "description")
+            data_lines = [l for l in lines[1:] if len(l.split("\t")) >= 7]
             rows = [l.split("\t") for l in data_lines]
-            kept = [r for r in rows if r[3] == "keep"]
+            kept = [r for r in rows if r[5] == "keep"]
             best_bpb = min((float(r[1]) for r in kept), default=None) if kept else None
             baseline = rows[0] if rows and rows[0][3] == "keep" else None
             best = next((r for r in kept if best_bpb and float(r[1]) == best_bpb), None)
@@ -723,9 +723,11 @@ class DashboardScreen(Screen):
             for i, cols in enumerate(sorted_rows):
                 if i >= max_rows:
                     remaining = len(sorted_rows) - max_rows
-                    table.add_row("", "", "", f"... and {remaining} more")
+                    table.add_row("", "", "", "", "", f"... and {remaining} more")
                     break
-                status, bpb = cols[3], cols[1]
+                status, bpb = cols[5], cols[1]
+                tokens_m = cols[2] if cols[2] else ""
+                steps_n = cols[3] if cols[3] else ""
                 is_best = best_bpb and status == "keep" and float(bpb) == best_bpb
                 delta = float(bpb) - best_bpb if best_bpb else 999
                 if is_best:
@@ -746,7 +748,7 @@ class DashboardScreen(Screen):
                 else:
                     icon = "[dim]✗[/]"
                     delta_str = f"+{delta:.4f}"
-                table.add_row(icon, bpb, delta_str, cols[4])
+                table.add_row(icon, bpb, tokens_m, steps_n, delta_str, cols[6])
         except Exception:
             pass
 
