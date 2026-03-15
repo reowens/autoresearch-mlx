@@ -510,9 +510,9 @@ def get_lr_multiplier(progress):
 
 
 def get_muon_momentum(step):
-    """Momentum warmup: 0.85 → 0.95 over 300 steps."""
+    """Momentum warmup: 0.85 → 0.97 over 300 steps."""
     frac = min(step / 300, 1)
-    return (1 - frac) * 0.85 + frac * 0.95
+    return (1 - frac) * 0.85 + frac * 0.97
 
 
 def get_weight_decay(progress):
