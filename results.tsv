@@ -76,3 +76,4 @@ c774e47	1.309926	21.2	discard	RoPE base 200K (from 10K; worse quality 1.310 vs 1
 bdb9c17	1.393179	21.2	discard	short_window seq_len/4 (512 tokens; too aggressive quality loss vs 1024)
 b8c77dd	1.400399	21.2	discard	x0_init 0.15 (increase x0 skip from 0.1 to 0.15; too strong)
 4cf3a8e	1.413052	21.2	discard	increase Muon target momentum 0.95->0.97 (destabilizes training)
+270800d	1.410547	21.2	discard	remove NorMuon variance reduction (much worse; variance normalization essential)

@@ -370,7 +370,9 @@ class MuonAdamW:
         paths = grp["paths"]
         lr = grp["lr"] * max(1.0, shape[-2] / shape[-1]) ** 0.5
         ns_steps = grp["ns_steps"]
+        beta2 = grp["beta2"]
         num_params = len(paths)
+        red_dim = -1 if shape[-2] >= shape[-1] else -2
 
         # Stack grads and params (float32 for optimizer math)
         stacked_grads = mx.stack([flat_grads[p].astype(mx.float32) for p in paths])
@@ -378,8 +380,13 @@ class MuonAdamW:
 
         # Initialize state if needed
         if shape not in self.muon_state:
+            smb_shape = (
+                (num_params, shape[-2], 1) if shape[-2] >= shape[-1]
+                else (num_params, 1, shape[-1])
+            )
             self.muon_state[shape] = {
                 "momentum_buffer": mx.zeros((num_params, *shape), dtype=mx.float32),
+                "second_momentum_buffer": mx.zeros(smb_shape, dtype=mx.float32),
             }
         state = self.muon_state[shape]
 
@@ -409,7 +416,21 @@ class MuonAdamW:
                 X = a * X + B @ X
         g = X
 
-        # Skip NorMuon variance reduction — use orthogonalized gradient directly
+        # --- NorMuon variance reduction (float32) ---
+        g_f32 = g.astype(mx.float32)
+        v_mean = mx.mean(g_f32 * g_f32, axis=red_dim, keepdims=True)
+        red_dim_size = g.shape[red_dim]
+        v_norm = mx.sqrt(mx.sum(v_mean, axis=(-2, -1), keepdims=True) * red_dim_size)
+
+        state["second_momentum_buffer"] = (
+            beta2 * state["second_momentum_buffer"] + (1 - beta2) * v_mean
+        )
+
+        step_size = mx.rsqrt(mx.maximum(state["second_momentum_buffer"], 1e-10))
+        scaled_sq_sum = v_mean * red_dim_size * step_size ** 2
+        v_norm_new = mx.sqrt(mx.sum(scaled_sq_sum, axis=(-2, -1), keepdims=True))
+        final_scale = step_size * (v_norm / mx.maximum(v_norm_new, 1e-10))
+        g = g_f32 * final_scale
 
         # --- Cautious weight decay + parameter update ---
         mask = (g * stacked_params) >= 0
@@ -447,7 +468,7 @@ class MuonAdamW:
         for s in self.adamw_state.values():
             arrays.extend([s["m"], s["v"]])
         for s in self.muon_state.values():
-            arrays.append(s["momentum_buffer"])
+            arrays.extend([s["momentum_buffer"], s["second_momentum_buffer"]])
         return arrays
 
 
