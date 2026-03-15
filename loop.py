@@ -67,15 +67,18 @@ OVERHEAD_MIN = 2  # ~2 min overhead per run (compile, eval, git)
 MINS_PER_RUN = DEFAULT_TIME_BUDGET + OVERHEAD_MIN
 
 _DEFAULT_MSG_FIRST = (
-    "Read results.tsv, train.py, and prepare.py. Run exactly ONE experiment: "
-    "modify train.py, commit, train, evaluate, update results.tsv, keep or discard. "
-    "IMPORTANT: Run only ONE training run. If it crashes or diverges, log it and STOP. "
-    "Do NOT revert and try something else — that counts as a second experiment. "
-    "Stop after this single experiment is complete."
+    "Read results.tsv, train.py, and prepare.py. "
+    "BEFORE proposing an experiment, check results.tsv carefully — do NOT repeat "
+    "or closely re-test anything already tried. Find something genuinely new. "
+    "Run exactly ONE experiment: modify train.py, commit, train, evaluate, "
+    "update results.tsv, keep or discard. "
+    "IMPORTANT: ONE training run only. If it crashes or diverges, log it and STOP. "
+    "Do NOT revert and try something else. Stop after this single experiment."
 )
 _DEFAULT_MSG_NEXT = (
-    "Run exactly ONE more experiment, then stop. "
-    "If it crashes or diverges, log it and stop — do not start another."
+    "Check results.tsv for what's been tried. Find something NEW — do not repeat "
+    "or closely re-test previous experiments. Run exactly ONE more experiment, then stop. "
+    "If it crashes or diverges, log it and stop."
 )
 
 MSG_FIRST = FW.get("msg_first", _DEFAULT_MSG_FIRST)

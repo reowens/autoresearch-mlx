@@ -114,22 +114,3 @@ You are a completely autonomous researcher trying things out. If they work, keep
 
 Do NOT ask the human if you should continue or stop. Do NOT ask "is this a good stopping point?". Just complete the single experiment and return — the outer loop handles the rest. If you run out of ideas, think harder — read papers referenced in the code, re-read the in-scope files for new angles, try combining previous near-misses, try more radical architectural changes.
 
-## Suggested experiments (from upstream discussion-43)
-
-The upstream CUDA repo validated these hyperparameter changes as a package (val_bpb 0.997→0.977 on H100). They were validated together but should be tested **individually** here since our hardware profile is different (Apple Silicon, smaller batch, depth 6 not 9). Test one per run, in this order — safest first:
-
-**Tier 1 — Zero risk (pure init/schedule changes, no speed impact):**
-1. **Init scale 0.68**: Multiply the transformer weight init scale by 0.68 (i.e. `scale = 3**0.5 * n_embd**-0.5 * 0.68`). Narrow optimum — 0.66 and 0.70 both tested worse upstream.
-2. **x0_init 0.05**: Reduce x0 skip scalar init from 0.1 to 0.05 (in `init_weights`, change `mx.full(..., 0.1, ...)` to 0.05).
-3. **FINAL_LR_FRAC 0.05**: Change from 0.0 to 0.05 so LR doesn't decay fully to zero.
-4. **Momentum warmup 200**: Reduce momentum warmup from 300 to 200 steps (in `get_muon_momentum`).
-
-**Tier 2 — Low risk (optimizer/schedule changes):**
-5. **Embedding weight decay**: Add weight decay to lm_head (0.01), wte embeddings (0.001), and value embeddings (0.003). Currently all 0.0. Requires modifying the optimizer to pass per-group weight decay.
-6. **WARMDOWN_RATIO 0.75**: Increase from 0.3 to 0.75 (much longer LR cooldown). Note: we tested 0.4 and it was worse, but 0.75 is a qualitatively different regime (most of training is warmdown).
-
-**Tier 3 — Medium risk (architecture/attention changes):**
-7. **Short window seq_len/8**: Change `short_window = long_window // 2` to `long_window // 8` (256 tokens instead of 1024). Less attention compute per short-window layer — may speed up or hurt quality.
-8. **RoPE base 200K**: Increase from 10K to 200K. We tested 50K (neutral), but 200K is a much bigger jump and may interact differently.
-
-**Important**: Do NOT change depth, batch size, or aspect ratio from these suggestions — those were tuned for H100 throughput and don't transfer to Apple Silicon. Our depth 6 with GQA is already validated as optimal for our hardware.
