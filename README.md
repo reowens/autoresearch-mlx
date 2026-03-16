@@ -2,7 +2,7 @@
 
 Fork of [karpathy/autoresearch](https://github.com/karpathy/autoresearch) ported to run natively on Apple Silicon via [MLX](https://github.com/ml-explore/mlx). No PyTorch, no CUDA — just your Mac.
 
-The core idea is unchanged: give an AI agent a small but real LLM training setup and let it experiment autonomously overnight. It modifies the code, trains for 5 minutes, checks if the result improved, keeps or discards, and repeats. You wake up to a log of experiments and (hopefully) a better model.
+The core idea is unchanged: give an AI agent a small but real LLM training setup and let it experiment autonomously overnight. It modifies the code, trains for 5–10 minutes, checks if the result improved, keeps or discards, and repeats. You wake up to a log of experiments and (hopefully) a better model.
 
 ## Quick start
 
@@ -12,55 +12,65 @@ The core idea is unchanged: give an AI agent a small but real LLM training setup
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 uv run prepare.py        # one-time data + tokenizer prep
-uv run train.py           # single 5-minute training experiment
+uv run train.py          # single training experiment
 ```
 
-Then point Claude Code (or another coding agent) at `program.md` and let it run the autonomous loop.
+To run the autonomous experiment loop (requires Claude Code or API key):
+
+```bash
+uv run start.py          # TUI with settings wizard
+uv run start.py 10       # skip wizard, run 10 experiments
+```
+
+## Results (114 experiments, M4 Pro 20-core GPU)
+
+| Milestone | val_bpb | Key change |
+|-----------|---------|------------|
+| Baseline | 1.417 | MuonAdamW + mx.compile |
+| + GQA | 1.283 | Half KV heads → faster steps |
+| + No warmup | 1.277 | Zero-init makes warmup unnecessary |
+| + Sigmoid gates | 1.309 | Bounded residual scaling (10 min budget) |
+| + Weight decay 0.15 | 1.305 | Synergizes with sigmoid gates |
+| **+ Learnable RMSNorm** | **1.304** | nn.RMSNorm with gain at 13 norm sites |
+
+Best config: depth 6, GQA (n_kv_head=2), sigmoid skip gates, learnable RMSNorm, weight decay 0.15, Muon+AdamW with NorMuon variance reduction and cautious weight decay.
 
 ## Project structure
 
 ```
-prepare.py            — constants, data prep + runtime utilities (do not modify)
 train.py              — model, optimizer, training loop (agent modifies this)
-program.md            — agent instructions (single-agent autonomous loop)
-program_agenthub.md   — multi-agent protocol (hub-coordinated experiments)
-analysis.ipynb        — experiment results visualization (requires analysis extras)
-pyproject.toml        — dependencies (MLX, numpy, tiktoken, etc.)
+prepare.py            — data prep, tokenizer, evaluation (do not modify)
+program.md            — agent instructions for the autonomous loop
+suggestions.md        — prioritized experiment queue for the agent
+results.tsv           — full experiment log (114 runs)
+loop.py               — outer loop orchestrator (spawns one agent per round)
+dashboard.py          — TUI dashboard (live progress, results table)
+start.py              — entry point for TUI
+justfile              — task runner (just start, just go 30, just logs)
 ```
 
-## Performance (M4 Max, 5-minute budget)
+## Key features
 
-| | AdamW (old) | MuonAdamW + mx.compile |
-|--|-------------|------------------------|
-| val_bpb | 1.497 | **1.417** |
-| Throughput | ~100K tok/sec | ~138K tok/sec |
-| Steps | 1,817 | 2,467 |
-
-5.3% val_bpb improvement with 38% higher throughput, at the same memory footprint (19 GB).
+- **Golden tag system.** `git tag best` always points to the last kept config. The loop restores `train.py` from this tag before each round — no code drift.
+- **Structural triage.** Computes effective rank (spectral entropy of weight SVDs) at 60 seconds. Kills degenerate experiments early instead of wasting the full budget.
+- **Checkpoint before eval.** Saves model weights before final evaluation so training isn't lost if eval OOMs.
+- **TUI dashboard.** Live training progress, thinking indicators, experiment results table, ETA, session cost tracking.
+- **caffeinate integration.** `justfile` commands prevent macOS idle sleep during overnight runs.
 
 ## Differences from upstream
 
 - **MLX instead of PyTorch/CUDA.** Native Apple Silicon training with unified memory.
-- **MuonAdamW optimizer.** Full port of upstream's Muon + AdamW, including polar express orthogonalization, NorMuon variance reduction, cautious weight decay, and momentum/weight-decay schedules.
-- **mx.compile on forward+backward pass.** ~38% throughput gain via graph fusion. Optimizer runs uncompiled (MLX can't compile custom optimizers with mutation patterns yet).
-- **Tuned eval token budget.** 10x shards (~5.2M tokens) — middle ground between upstream's 40x and fast iteration.
-- **~6-7 minutes per experiment.** 5 min training + compile/eval overhead.
-- **MFU reporting is placeholder.** No Apple Silicon equivalent to the H100 FLOPs reference.
+- **MuonAdamW optimizer.** Full port including polar express orthogonalization, NorMuon variance reduction, cautious weight decay, and momentum/weight-decay schedules. Float32 Newton-Schulz (bf16 diverges on Apple Silicon).
+- **mx.compile on forward+backward pass.** ~38% throughput gain via graph fusion.
+- **Learnable RMSNorm.** nn.RMSNorm with gain at pre-attention, pre-MLP, and final norm sites. Bare norm kept for QK normalization and initial embedding norm.
+- **Sigmoid skip gates.** `sigmoid(resid_lambda) * x` instead of raw linear scalars — bounded, better gradient flow.
 
 ## Analysis
-
-Install optional analysis dependencies, then open the notebook:
 
 ```bash
 uv sync --extra analysis
 uv run jupyter notebook analysis.ipynb
 ```
-
-The notebook reads `results.tsv` (generated by the experiment loop) and produces:
-- Experiment outcome summary (keep/discard/crash rates)
-- Val BPB progress plot with running frontier
-- Ranked improvements by delta
-- Summary statistics
 
 ## Acknowledgments
 
