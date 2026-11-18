@@ -42,3 +42,13 @@ flywheel.json
 
 # Dashboard log
 dashboard.log
+
+# Local credentials and agent settings
+.env
+.env.*
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Session transcripts and archived run output
+session.log
+/logs/
